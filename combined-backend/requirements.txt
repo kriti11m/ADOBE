@@ -1,0 +1,17 @@
+# Combined requirements from both ADOBE1A and CORS_Adobe_1B projects
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# From ADOBE1A (PDF Structure Extractor)
+pdfplumber>=0.10.0
+scikit-learn>=1.3.0
+PyMuPDF>=1.23.0
+
+# From CORS_Adobe_1B (Document Analysis) - Updated versions
+torch>=2.6.0
+transformers>=4.38.0
+PyPDF2==3.0.1
+sentence-transformers>=2.2.2
+
+# Common dependencies
+numpy>=1.26.0
