@@ -3,12 +3,19 @@ import { X, ArrowLeft, RefreshCw } from 'lucide-react';
 import { useDarkMode } from '../App';
 import backendService from '../services/backendService';
 
-const SmartConnections = ({ currentDocument, recommendations, isProcessing }) => {
+const SmartConnections = ({ currentDocument, recommendations, isProcessing, onGetRecommendations, activeCollection }) => {
   const [view, setView] = useState('bulb'); // 'bulb', 'connections', 'insights'
   const { isDarkMode } = useDarkMode();
 
   // Use passed recommendations or empty array
   const relatedSections = recommendations || [];
+
+  const handleSmartConnectionsClick = () => {
+    if (activeCollection || (currentDocument && onGetRecommendations)) {
+      onGetRecommendations(currentDocument);
+    }
+    setView('connections');
+  };
 
   const insights = [
     {
@@ -73,20 +80,29 @@ const SmartConnections = ({ currentDocument, recommendations, isProcessing }) =>
   // Main view - connections button
   if (view === 'bulb') {
     return (
-      <div className={`w-1/5 p-4 transition-colors duration-300 ${
+      <div className={`w-80 p-4 transition-colors duration-300 ${
         isDarkMode ? 'bg-gray-800' : 'bg-white'
-      } border-l ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-        <div className="flex items-center justify-center h-full">
-          <div className="text-center">
+      } border-l ${isDarkMode ? 'border-gray-700' : 'border-gray-200'} flex-shrink-0`}>
+        <div className="flex items-center justify-center h-full min-h-[500px]">
+          <div className="text-center px-4">
             <button 
-              onClick={() => setView('connections')}
-              className={`w-16 h-16 rounded-full mb-4 flex items-center justify-center transition-all duration-300 hover:scale-110 ${
-                isDarkMode 
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                  : 'bg-blue-100 hover:bg-blue-200 text-blue-600'
+              onClick={handleSmartConnectionsClick}
+              disabled={!activeCollection && !currentDocument || isProcessing}
+              className={`w-16 h-16 rounded-full mb-4 flex items-center justify-center transition-all duration-300 hover:scale-110 mx-auto ${
+                (!activeCollection && !currentDocument) || isProcessing
+                  ? isDarkMode 
+                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : isDarkMode 
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                    : 'bg-blue-100 hover:bg-blue-200 text-blue-600'
               }`}
             >
-              <span className="text-2xl">💡</span>
+              {isProcessing ? (
+                <RefreshCw className="w-6 h-6 animate-spin" />
+              ) : (
+                <span className="text-2xl">💡</span>
+              )}
             </button>
             <h3 className={`font-medium text-sm mb-2 ${
               isDarkMode ? 'text-white' : 'text-gray-900'
@@ -94,7 +110,16 @@ const SmartConnections = ({ currentDocument, recommendations, isProcessing }) =>
             <p className={`text-xs leading-relaxed ${
               isDarkMode ? 'text-gray-400' : 'text-gray-500'
             }`}>
-              Click to discover relevant sections from your documents using AI analysis
+              {!activeCollection && !currentDocument 
+                ? 'Create a collection or select a document to discover relevant sections' 
+                : isProcessing
+                  ? activeCollection
+                    ? `Analyzing ${activeCollection.documents.length} documents in collection...`
+                    : 'Analyzing document sections...'
+                  : activeCollection
+                    ? `Click to analyze ${activeCollection.documents.length} documents in "${activeCollection.name}"`
+                    : 'Click to discover relevant sections using AI analysis'
+              }
             </p>
             {relatedSections.length > 0 && (
               <div className={`mt-3 text-xs px-2 py-1 rounded ${
@@ -112,11 +137,11 @@ const SmartConnections = ({ currentDocument, recommendations, isProcessing }) =>
   // Connections view
   if (view === 'connections') {
     return (
-      <div className={`w-1/5 flex flex-col transition-colors duration-300 ${
+      <div className={`w-80 flex flex-col transition-colors duration-300 ${
         isDarkMode 
           ? 'bg-gray-800 border-l border-gray-700' 
           : 'bg-white border-l border-gray-200'
-      }`}>
+      } flex-shrink-0`}>
         <div className={`p-4 border-b transition-colors duration-300 ${
           isDarkMode ? 'border-gray-700' : 'border-gray-200'
         }`}>
@@ -137,7 +162,7 @@ const SmartConnections = ({ currentDocument, recommendations, isProcessing }) =>
           </div>
           <p className={`text-xs ${
             isDarkMode ? 'text-gray-400' : 'text-gray-500'
-          }`}>Top {Math.min(relatedSections.length, 3)} AI-ranked matches</p>
+          }`}>Top 3 AI-ranked relevant sections</p>
         </div>
         
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -171,7 +196,7 @@ const SmartConnections = ({ currentDocument, recommendations, isProcessing }) =>
               </div>
             </div>
           ) : (
-            relatedSections.map((section) => (
+            relatedSections.slice(0, 3).map((section, index) => (
               <div 
                 key={section.id}
                 className={`related-item border rounded-lg p-3 cursor-pointer transition-colors ${getColorClasses(section.color)}`}
@@ -186,15 +211,31 @@ const SmartConnections = ({ currentDocument, recommendations, isProcessing }) =>
                     {section.page}
                   </span>
                 </div>
-                <h5 className="font-medium text-sm mb-1">{section.section}</h5>
-                <p className="text-xs leading-relaxed mb-2 line-clamp-3">{section.description}</p>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center mb-2">
+                  <span className={`text-xs px-2 py-1 rounded mr-2 ${
+                    index === 0 
+                      ? isDarkMode ? 'bg-green-800 text-green-200' : 'bg-green-100 text-green-800'
+                      : index === 1
+                        ? isDarkMode ? 'bg-blue-800 text-blue-200' : 'bg-blue-100 text-blue-800'
+                        : isDarkMode ? 'bg-purple-800 text-purple-200' : 'bg-purple-100 text-purple-800'
+                  }`}>
+                    #{index + 1} Most Relevant
+                  </span>
                   <span className={`text-xs px-2 py-1 rounded ${
                     section.relevance >= 80 
                       ? isDarkMode ? 'bg-green-800 text-green-200' : 'bg-green-100 text-green-800'
                       : isDarkMode ? 'bg-yellow-800 text-yellow-200' : 'bg-yellow-100 text-yellow-800'
                   }`}>
-                    {section.relevance}% relevant
+                    {section.relevance}% match
+                  </span>
+                </div>
+                <h5 className="font-medium text-sm mb-1">{section.section}</h5>
+                <p className="text-xs leading-relaxed mb-2 line-clamp-3">{section.description}</p>
+                <div className="flex items-center justify-between">
+                  <span className={`text-xs ${
+                    isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                  }`}>
+                    From Part 1B Analysis
                   </span>
                   <button 
                     onClick={() => setView('insights')}

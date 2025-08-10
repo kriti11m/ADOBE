@@ -5,6 +5,7 @@ import DocumentSidebar from './components/DocumentSidebar';
 import AdobePDFViewer from './components/FinalAdobePDFViewer';
 import SmartConnections from './components/SmartConnections';
 import PDFUploader from './components/PDFUploader';
+import CollectionUploader from './components/CollectionUploader';
 import backendService from './services/backendService';
 
 // Create Dark Mode Context
@@ -27,6 +28,9 @@ function App() {
   const [recommendations, setRecommendations] = useState([]);
   const [showUploader, setShowUploader] = useState(false);
   const [documents, setDocuments] = useState([]);
+  const [collections, setCollections] = useState([]);
+  const [activeCollection, setActiveCollection] = useState(null);
+  const [showCollectionUploader, setShowCollectionUploader] = useState(false);
 
   // Dark mode effect
   useEffect(() => {
@@ -78,23 +82,71 @@ function App() {
   };
 
   const handleGetRecommendations = async (document, section = null) => {
-    if (!document || !document.file) return;
-
-    setIsProcessing(true);
-    try {
-      // Use the user's persona and task from onboarding
-      const recs = await backendService.getRecommendations(
-        [document.file], // Pass as array since backend expects multiple files
-        userProfile.role || 'Researcher',
-        userProfile.task || 'Analyze document content'
-      );
-      setRecommendations(recs);
-    } catch (error) {
-      console.error('Error getting recommendations:', error);
-      setRecommendations([]); // Set empty array on error
-    } finally {
-      setIsProcessing(false);
+    // If we have an active collection, analyze all PDFs in the collection
+    if (activeCollection && activeCollection.documents.length > 0) {
+      setIsProcessing(true);
+      try {
+        // Use all documents from the active collection
+        const collectionFiles = activeCollection.documents.map(doc => doc.file);
+        const recs = await backendService.getRecommendations(
+          collectionFiles,
+          userProfile.role || 'Researcher',
+          userProfile.task || 'Analyze document content'
+        );
+        setRecommendations(recs);
+        console.log(`Analyzed ${collectionFiles.length} PDFs from collection "${activeCollection.name}"`);
+      } catch (error) {
+        console.error('Error getting collection recommendations:', error);
+        setRecommendations([]);
+      } finally {
+        setIsProcessing(false);
+      }
+    } else if (document && document.file) {
+      // Fallback to single document analysis
+      setIsProcessing(true);
+      try {
+        const recs = await backendService.getRecommendations(
+          [document.file],
+          userProfile.role || 'Researcher',
+          userProfile.task || 'Analyze document content'
+        );
+        setRecommendations(recs);
+      } catch (error) {
+        console.error('Error getting single document recommendations:', error);
+        setRecommendations([]);
+      } finally {
+        setIsProcessing(false);
+      }
     }
+  };
+
+  const handleCreateCollection = (name, files) => {
+    const newCollection = {
+      id: `collection-${Date.now()}`,
+      name,
+      documents: Array.from(files).map(file => ({
+        id: `${file.name}-${Date.now()}`,
+        name: file.name,
+        file: file,
+        status: 'ready',
+        timestamp: 'Just now',
+        tags: ['Collection']
+      })),
+      createdAt: new Date().toISOString(),
+      status: 'ready'
+    };
+    
+    setCollections(prev => [newCollection, ...prev]);
+    setActiveCollection(newCollection);
+    setShowCollectionUploader(false);
+    console.log(`Created collection "${name}" with ${files.length} documents`);
+  };
+
+  const handleSelectCollection = (collection) => {
+    setActiveCollection(collection);
+    setCurrentDocument(null); // Clear single document selection
+    setRecommendations([]); // Clear previous recommendations
+    console.log(`Selected collection: ${collection.name}`);
   };
 
   const handleFileUpload = (files) => {
@@ -162,26 +214,34 @@ function App() {
           isProcessing={isProcessing}
         />
 
-        <div className="flex h-screen">
+        <div className="flex" style={{ height: 'calc(100vh - 80px)' }}>
           <DocumentSidebar 
             documents={documents}
             onDocumentSelect={handleDocumentSelect}
             onFileUpload={handleFileUpload}
             currentDocument={currentDocument}
             onShowUploader={() => setShowUploader(true)}
+            collections={collections}
+            activeCollection={activeCollection}
+            onSelectCollection={handleSelectCollection}
+            onShowCollectionUploader={() => setShowCollectionUploader(true)}
           />
 
           <div className="flex-1 flex">
-            <AdobePDFViewer 
-              selectedDocument={currentDocument}
-              onDocumentLoad={handleDocumentLoad}
-              onSectionSelect={handleSectionSelect}
-            />
+            <div className="flex-1">
+              <AdobePDFViewer 
+                selectedDocument={currentDocument}
+                onDocumentLoad={handleDocumentLoad}
+                onSectionSelect={handleSectionSelect}
+              />
+            </div>
 
             <SmartConnections 
               currentDocument={currentDocument}
               recommendations={recommendations}
               isProcessing={isProcessing}
+              onGetRecommendations={handleGetRecommendations}
+              activeCollection={activeCollection}
             />
           </div>
         </div>
@@ -204,6 +264,29 @@ function App() {
               <PDFUploader
                 onDocumentsProcessed={handleDocumentsProcessed}
                 userProfile={userProfile}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Collection Uploader Modal */}
+        {showCollectionUploader && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  Create Document Collection
+                </h2>
+                <button
+                  onClick={() => setShowCollectionUploader(false)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  ✕
+                </button>
+              </div>
+              <CollectionUploader
+                onCollectionCreate={handleCreateCollection}
+                onClose={() => setShowCollectionUploader(false)}
               />
             </div>
           </div>

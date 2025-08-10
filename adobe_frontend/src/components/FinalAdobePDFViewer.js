@@ -78,26 +78,31 @@ const FinalAdobePDFViewer = ({ selectedDocument }) => {
 
   if (!selectedDocument) {
     return (
-      <div className={`flex items-center justify-center h-full ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
-        <div className="text-center">
-          <div className={`w-24 h-24 mx-auto mb-4 rounded-full ${isDarkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg flex items-center justify-center`}>
-            <svg className={`w-12 h-12 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className={`flex items-center justify-center w-full h-full min-h-[500px] ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} border-r ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+        <div className="text-center px-8 py-12 max-w-md mx-auto">
+          <div className={`w-20 h-20 mx-auto mb-6 rounded-full ${isDarkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg flex items-center justify-center`}>
+            <svg className={`w-10 h-10 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           </div>
-          <h3 className={`text-lg font-medium mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+          <h3 className={`text-xl font-semibold mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
             No Document Selected
           </h3>
-          <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          <p className={`text-base mb-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
             Choose a document from the sidebar to start viewing
           </p>
+          <div className={`text-sm ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+            <p>• Upload individual documents or create collections</p>
+            <p>• Use Smart Connections for AI-powered insights</p>
+            <p>• Get personalized recommendations based on your role</p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`w-full h-full relative ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
+    <div className={`w-full h-full relative ${isDarkMode ? 'bg-gray-900' : 'bg-white'} border-r ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
       {isLoading && (
         <div className={`absolute inset-0 flex items-center justify-center z-10 ${isDarkMode ? 'bg-gray-900 bg-opacity-90' : 'bg-white bg-opacity-90'}`}>
           <div className="text-center">
