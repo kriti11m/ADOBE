@@ -8,15 +8,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 import uvicorn
 
-# Import routers from both parts
+# Import routers from all parts
 from app.part1a.router import router as part1a_router
 from app.part1b.router import router as part1b_router
+from app.insights.router import router as insights_router
 
 # Create FastAPI application
 app = FastAPI(
-    title="Combined PDF Processing Backend",
-    description="A combined backend that integrates PDF structure extraction and document analysis capabilities",
-    version="1.0.0",
+    title="Combined PDF Processing Backend with AI Insights",
+    description="A comprehensive backend that integrates PDF structure extraction, document analysis, and AI-powered insights generation using Gemini 2.5 Flash",
+    version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -33,6 +34,7 @@ app.add_middleware(
 # Include routers
 app.include_router(part1a_router)
 app.include_router(part1b_router)
+app.include_router(insights_router)
 
 @app.get("/", response_class=HTMLResponse)
 async def root():

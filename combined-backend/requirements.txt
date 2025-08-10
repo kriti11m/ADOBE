@@ -1,6 +1,7 @@
 # Combined requirements from both ADOBE1A and CORS_Adobe_1B projects
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
 
 # From ADOBE1A (PDF Structure Extractor)
 pdfplumber>=0.10.0
@@ -12,6 +13,12 @@ torch>=2.6.0
 transformers>=4.38.0
 PyPDF2==3.0.1
 sentence-transformers>=2.2.2
+
+# AI Insights Generation (Gemini 2.5 Flash)
+google-generativeai>=0.3.0
+
+# Environment variables
+python-dotenv>=1.0.0
 
 # Common dependencies
 numpy>=1.26.0
