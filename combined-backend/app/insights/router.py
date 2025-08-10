@@ -8,10 +8,16 @@ import tempfile
 import shutil
 from typing import Dict, Any, List
 from pathlib import Path
+from datetime import datetime
+import time
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+
+from sqlalchemy.orm import Session
+from ..database.database import get_db
+from ..services.history_service import HistoryService
 
 from .gemini_generator import GeminiInsightsGenerator
 from ..part1b.pipeline import DocumentAnalysisPipeline
@@ -30,26 +36,11 @@ class InsightsRequest(BaseModel):
 async def generate_insights_from_files(
     persona: str = Form("Researcher"),
     job: str = Form("Analyze document content and extract key insights"),
-    files: List[UploadFile] = File(...)
+    files: List[UploadFile] = File(...),
+    db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
-    Generate comprehensive insights from uploaded PDF files.
-    
-    This endpoint:
-    1. Uses Part 1B pipeline to extract relevant sections
-    2. Uses Gemini 2.5 Flash to generate insights, facts, and podcast scripts
-    
-    Args:
-        persona: User role/persona (e.g., "Undergraduate Chemistry Student")
-        job: Specific task (e.g., "Identify key concepts for exam preparation")
-        files: List of uploaded PDF files
-        
-    Returns:
-        Dict containing comprehensive insights including:
-        - Key insights
-        - Did you know facts
-        - Contradictions and connections
-        - Podcast script
+    Generate comprehensive insights and store complete session history
     """
     
     # Validate files
@@ -72,7 +63,11 @@ async def generate_insights_from_files(
     temp_file_paths = []
     
     try:
-        # Save uploaded files to temporary directory
+        # Initialize history service
+        history_service = HistoryService(db)
+        stored_documents = []
+        
+        # Process files and store documents
         for file in pdf_files:
             temp_file_path = os.path.join(temp_dir, file.filename)
             temp_file_paths.append(temp_file_path)
@@ -80,10 +75,19 @@ async def generate_insights_from_files(
             with open(temp_file_path, "wb") as temp_file:
                 content = await file.read()
                 temp_file.write(content)
-        
+                
+                # Store in database
+                pdf_doc = history_service.store_pdf_document(
+                    filename=file.filename,
+                    file_content=content,
+                    file_path=temp_file_path
+                )
+                stored_documents.append(pdf_doc)
+
         print(f"Processing {len(temp_file_paths)} PDF files for insights generation...")
         
-        # Step 1: Use Part 1B pipeline to extract relevant sections
+        # Step 1: Use Part 1B pipeline
+        start_time = time.time()
         pipeline = DocumentAnalysisPipeline()
         part1b_result = pipeline.process_documents(
             pdf_paths=temp_file_paths,
@@ -95,27 +99,61 @@ async def generate_insights_from_files(
         insights_generator = GeminiInsightsGenerator()
         insights_result = insights_generator.generate_comprehensive_insights(part1b_result)
         
+        processing_time = time.time() - start_time
+        
+        # Create analysis session
+        session = history_service.create_analysis_session(
+            persona=persona,
+            job_description=job,
+            pdf_documents=stored_documents,
+            processing_time=processing_time
+        )
+        
+        # Store extracted sections
+        if 'extracted_sections' in part1b_result:
+            history_service.store_extracted_sections(
+                session_id=session.id,
+                sections=part1b_result['extracted_sections']
+            )
+        
+        # Store generated insights
+        if 'insights' in insights_result:
+            history_service.store_generated_insights(
+                session_id=session.id,
+                insights=insights_result['insights']
+            )
+        
         # Combine results
-        return {
+        final_result = {
+            "session_id": session.id,
             "part1b_analysis": part1b_result,
             "insights": insights_result,
             "metadata": {
                 "files_processed": len(pdf_files),
                 "persona": persona,
                 "job": job,
-                "processing_timestamp": part1b_result.get("metadata", {}).get("processing_timestamp")
+                "processing_time_seconds": processing_time,
+                "timestamp": datetime.now().isoformat()
             }
         }
         
+        return final_result
+        
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error generating insights: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error generating insights: {str(e)}")
     
     finally:
         # Clean up temporary files
-        shutil.rmtree(temp_dir)
+        for temp_file_path in temp_file_paths:
+            if os.path.exists(temp_file_path):
+                try:
+                    os.unlink(temp_file_path)
+                except:
+                    pass
+        try:
+            os.rmdir(temp_dir)
+        except:
+            pass
 
 
 @router.post("/generate-from-sections")

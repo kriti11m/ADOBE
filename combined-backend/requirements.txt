@@ -22,3 +22,7 @@ python-dotenv>=1.0.0
 
 # Common dependencies
 numpy>=1.26.0
+
+# For database
+sqlalchemy>=2.0.0
+alembic>=1.12.0

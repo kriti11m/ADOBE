@@ -1,18 +1,17 @@
-"""
-FastAPI router for Part 1B (Document Analysis System)
-Extracts and ranks relevant sections from PDF documents based on user personas and tasks
-"""
-
 import tempfile
 import os
 import json
+import time
 from pathlib import Path
 from typing import Dict, Any, List
 from pydantic import BaseModel
-from fastapi import APIRouter, UploadFile, File, HTTPException, Form
+from fastapi import APIRouter, UploadFile, File, HTTPException, Form, Depends
 from fastapi.responses import JSONResponse
 
 from .pipeline import DocumentAnalysisPipeline
+from sqlalchemy.orm import Session
+from ..database.database import get_db
+from ..services.history_service import HistoryService
 
 router = APIRouter(prefix="/part1b", tags=["Document Analysis"])
 
@@ -25,18 +24,11 @@ class AnalysisRequest(BaseModel):
 async def analyze_documents(
     persona: str = Form("Researcher"),
     job: str = Form("Analyze document content and extract relevant sections"),
-    files: List[UploadFile] = File(...)
+    files: List[UploadFile] = File(...),
+    db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
-    Analyze PDF documents and extract relevant sections based on user persona and job.
-    
-    Args:
-        persona: User role/persona (e.g., "Researcher", "Student", "Analyst")
-        job: Specific task to accomplish
-        files: List of uploaded PDF files
-        
-    Returns:
-        Dict containing analysis results with ranked relevant sections
+    Analyze PDF documents and store complete history in database
     """
     
     # Validate files
@@ -48,16 +40,20 @@ async def analyze_documents(
                 detail=f"Only PDF files are allowed. Invalid file: {file.filename}"
             )
         pdf_files.append(file)
-    
+
     if len(pdf_files) == 0:
         raise HTTPException(status_code=400, detail="At least one PDF file is required")
-    
+
     # Create temporary directory for uploaded files
     temp_dir = tempfile.mkdtemp()
     temp_file_paths = []
     
     try:
-        # Save uploaded files to temporary location
+        # Initialize history service
+        history_service = HistoryService(db)
+        stored_documents = []
+        
+        # Save uploaded files and store in database
         for file in pdf_files:
             temp_file_path = os.path.join(temp_dir, file.filename)
             temp_file_paths.append(temp_file_path)
@@ -65,14 +61,42 @@ async def analyze_documents(
             with open(temp_file_path, "wb") as temp_file:
                 content = await file.read()
                 temp_file.write(content)
-        
-        # Initialize pipeline and process the documents
+                
+                # Store document in database
+                pdf_doc = history_service.store_pdf_document(
+                    filename=file.filename,
+                    file_content=content,
+                    file_path=temp_file_path
+                )
+                stored_documents.append(pdf_doc)
+
+        # Process documents
+        start_time = time.time()
         pipeline = DocumentAnalysisPipeline()
         result = pipeline.process_documents(
             pdf_paths=temp_file_paths,
             persona=persona,
             job=job
         )
+        processing_time = time.time() - start_time
+        
+        # Create analysis session in database
+        session = history_service.create_analysis_session(
+            persona=persona,
+            job_description=job,
+            pdf_documents=stored_documents,
+            processing_time=processing_time
+        )
+        
+        # Store extracted sections
+        if 'extracted_sections' in result:
+            history_service.store_extracted_sections(
+                session_id=session.id,
+                sections=result['extracted_sections']
+            )
+        
+        # Add session ID to result
+        result['session_id'] = session.id
         
         return result
         
@@ -81,9 +105,14 @@ async def analyze_documents(
     
     finally:
         # Clean up temporary files
-        import shutil
+        for temp_file_path in temp_file_paths:
+            if os.path.exists(temp_file_path):
+                try:
+                    os.unlink(temp_file_path)
+                except:
+                    pass
         try:
-            shutil.rmtree(temp_dir)
+            os.rmdir(temp_dir)
         except:
             pass
 

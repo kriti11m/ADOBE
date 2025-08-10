@@ -1,0 +1,100 @@
+# Add these imports to the top of app/part1b/router.py# Add these imports to the top of app/part1b/router.py
+from sqlalchemy.orm import Session
+from ..database.database import get_db
+from ..services.history_service import HistoryService
+import time
+
+# Then modify your analyze_documents function to include these lines:
+
+# After validation but before processing, add:
+history_service = HistoryService(db)
+stored_documents = []
+
+# When saving files, also store in database:
+for file in pdf_files:
+    temp_file_path = os.path.join(temp_dir, file.filename)
+    temp_file_paths.append(temp_file_path)
+    
+    with open(temp_file_path, "wb") as temp_file:
+        content = await file.read()
+        temp_file.write(content)
+        
+        # Store document in database
+        pdf_doc = history_service.store_pdf_document(
+            filename=file.filename,
+            file_content=content,
+            file_path=temp_file_path
+        )
+        stored_documents.append(pdf_doc)
+
+# Around your processing section, add timing:
+start_time = time.time()
+# ... your existing processing code ...
+processing_time = time.time() - start_time
+
+# After processing, create session and store results:
+session = history_service.create_analysis_session(
+    persona=persona,
+    job_description=job,
+    pdf_documents=stored_documents,
+    processing_time=processing_time
+)
+
+# Store extracted sections if they exist in your result
+if 'extracted_sections' in result:
+    history_service.store_extracted_sections(
+        session_id=session.id,
+        sections=result['extracted_sections']
+    )
+
+# Add session ID to result
+result['session_id'] = session.idfrom sqlalchemy.orm import Session
+from ..database.database import get_db
+from ..services.history_service import HistoryService
+import time
+
+# Then modify your analyze_documents function to include these lines:
+
+# After validation but before processing, add:
+history_service = HistoryService(db)
+stored_documents = []
+
+# When saving files, also store in database:
+for file in pdf_files:
+    temp_file_path = os.path.join(temp_dir, file.filename)
+    temp_file_paths.append(temp_file_path)
+    
+    with open(temp_file_path, "wb") as temp_file:
+        content = await file.read()
+        temp_file.write(content)
+        
+        # Store document in database
+        pdf_doc = history_service.store_pdf_document(
+            filename=file.filename,
+            file_content=content,
+            file_path=temp_file_path
+        )
+        stored_documents.append(pdf_doc)
+
+# Around your processing section, add timing:
+start_time = time.time()
+# ... your existing processing code ...
+processing_time = time.time() - start_time
+
+# After processing, create session and store results:
+session = history_service.create_analysis_session(
+    persona=persona,
+    job_description=job,
+    pdf_documents=stored_documents,
+    processing_time=processing_time
+)
+
+# Store extracted sections if they exist in your result
+if 'extracted_sections' in result:
+    history_service.store_extracted_sections(
+        session_id=session.id,
+        sections=result['extracted_sections']
+    )
+
+# Add session ID to result
+result['session_id'] = session.id
