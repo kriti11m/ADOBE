@@ -1,31 +1,48 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Menu } from 'lucide-react';
+import { Search, Menu, FileText, Clock } from 'lucide-react';
 import { useDarkMode } from '../App';
+import backendService from '../services/backendService';
 
-const PDFViewer = ({ currentDocument }) => {
-  const [currentSection, setCurrentSection] = useState('3.2 Experimental Setup');
+const PDFViewer = ({ currentDocument, onSectionSelect, recommendations }) => {
+  const [documentStructure, setDocumentStructure] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [currentSection, setCurrentSection] = useState(null);
   const [showSectionHeader, setShowSectionHeader] = useState(false);
   const { isDarkMode } = useDarkMode();
 
-  const sections = [
-    '1. Introduction',
-    '2. Methodology Framework', 
-    '3. Experimental Setup',
-    '4. Results and Analysis'
-  ];
-
+  // Extract document structure when a new document is selected
   useEffect(() => {
-    if (currentDocument) {
-      setShowSectionHeader(true);
-      // Simulate section cycling
-      const interval = setInterval(() => {
-        setCurrentSection(sections[Math.floor(Math.random() * sections.length)]);
-      }, 5000);
-      return () => clearInterval(interval);
-    } else {
-      setShowSectionHeader(false);
+    const extractDocumentStructure = async () => {
+      if (currentDocument && currentDocument.file) {
+        setIsLoading(true);
+        setError(null);
+        
+        try {
+          const structure = await backendService.extractPDFStructure(currentDocument.file);
+          setDocumentStructure(structure);
+          setCurrentSection(structure.outline?.[0] || null);
+        } catch (err) {
+          console.error('Error extracting document structure:', err);
+          setError('Failed to extract document structure');
+        } finally {
+          setIsLoading(false);
+        }
+      } else {
+        setDocumentStructure(null);
+        setCurrentSection(null);
+      }
+    };
+
+    extractDocumentStructure();
+  }, [currentDocument]);
+
+  const handleSectionClick = (section) => {
+    setCurrentSection(section);
+    if (onSectionSelect) {
+      onSectionSelect(section);
     }
-  }, [currentDocument, sections]);
+  };
 
   if (!currentDocument) {
     return (

@@ -2,10 +2,10 @@ import React, { useState, useEffect, createContext, useContext } from 'react';
 import OnboardingModal from './components/OnboardingModal';
 import Navigation from './components/Navigation';
 import DocumentSidebar from './components/DocumentSidebar';
-import PDFViewer from './components/PDFViewer';
+import AdobePDFViewer from './components/FinalAdobePDFViewer';
 import SmartConnections from './components/SmartConnections';
-import PodcastButton from './components/PodcastButton';
-import AudioPlayer from './components/AudioPlayer';
+import PDFUploader from './components/PDFUploader';
+import backendService from './services/backendService';
 
 // Create Dark Mode Context
 export const DarkModeContext = createContext();
@@ -23,33 +23,10 @@ function App() {
   const [userProfile, setUserProfile] = useState({ role: '', task: '' });
   const [currentDocument, setCurrentDocument] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showAudioPlayer, setShowAudioPlayer] = useState(false);
-  const [audioPlaying, setAudioPlaying] = useState(false);
-  const [audioProgress, setAudioProgress] = useState(0);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [documents, setDocuments] = useState([
-    {
-      id: 'ml-research.pdf',
-      name: 'ML Research Methods.pdf',
-      status: 'analyzed',
-      timestamp: '2 hours ago',
-      tags: ['Recent', 'Analyzed']
-    },
-    {
-      id: 'climate-models.pdf',
-      name: 'Climate Model Analysis.pdf',
-      status: 'analyzed',
-      timestamp: 'Yesterday',
-      tags: ['Analyzed']
-    },
-    {
-      id: 'financial-trends.pdf',
-      name: 'Financial Trends 2024.pdf',
-      status: 'new',
-      timestamp: '3 days ago',
-      tags: ['New']
-    }
-  ]);
+  const [recommendations, setRecommendations] = useState([]);
+  const [showUploader, setShowUploader] = useState(false);
+  const [documents, setDocuments] = useState([]);
 
   // Dark mode effect
   useEffect(() => {
@@ -78,12 +55,53 @@ function App() {
 
   const handleDocumentSelect = (document) => {
     setCurrentDocument(document);
+    // Automatically get recommendations when document is selected
+    if (document && document.file && userProfile.role && userProfile.task) {
+      handleGetRecommendations(document);
+    }
+  };
+
+  const handleDocumentLoad = (document) => {
+    console.log('Document loaded in Adobe viewer:', document.name);
+    // Get recommendations when PDF successfully loads if we have user profile
+    if (document && document.file && userProfile.role && userProfile.task) {
+      handleGetRecommendations(document);
+    }
+  };
+
+  const handleSectionSelect = (section) => {
+    console.log('Section selected:', section);
+    // Handle section selection - update recommendations based on current section
+    if (currentDocument && section) {
+      handleGetRecommendations(currentDocument, section);
+    }
+  };
+
+  const handleGetRecommendations = async (document, section = null) => {
+    if (!document || !document.file) return;
+
+    setIsProcessing(true);
+    try {
+      // Use the user's persona and task from onboarding
+      const recs = await backendService.getRecommendations(
+        [document.file], // Pass as array since backend expects multiple files
+        userProfile.role || 'Researcher',
+        userProfile.task || 'Analyze document content'
+      );
+      setRecommendations(recs);
+    } catch (error) {
+      console.error('Error getting recommendations:', error);
+      setRecommendations([]); // Set empty array on error
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleFileUpload = (files) => {
     const newDocuments = Array.from(files).map(file => ({
       id: file.name,
       name: file.name,
+      file: file, // Store the actual file object
       status: 'new',
       timestamp: 'Just now',
       tags: ['New']
@@ -96,33 +114,32 @@ function App() {
     }
   };
 
-  const handleAudioToggle = () => {
-    setShowAudioPlayer(!showAudioPlayer);
-  };
-
-  const handlePlayPause = () => {
-    setAudioPlaying(!audioPlaying);
+  const handleDocumentsProcessed = (processedData) => {
+    console.log('Documents processed:', processedData);
+    
+    // Add processed documents to library
+    const newDocuments = processedData.structures.map(({ file, structure }) => ({
+      id: file.name + '_' + Date.now(),
+      name: file.name,
+      file: file,
+      structure: structure,
+      status: 'analyzed',
+      timestamp: 'Just processed',
+      tags: ['Analyzed', 'In Library']
+    }));
+    
+    setRecommendations(processedData.recommendations);
+    setDocuments(prev => [...newDocuments, ...prev]);
+    
+    // Show success message or update UI as needed
+    if (processedData.errors.length > 0) {
+      console.warn('Some documents failed to process:', processedData.errors);
+    }
   };
 
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
   };
-
-  useEffect(() => {
-    if (audioPlaying) {
-      const interval = setInterval(() => {
-        setAudioProgress(prev => {
-          if (prev >= 225) {
-            setAudioPlaying(false);
-            return 0;
-          }
-          return prev + 1;
-        });
-      }, 1000);
-
-      return () => clearInterval(interval);
-    }
-  }, [audioPlaying]);
 
   const darkModeContextValue = {
     isDarkMode,
@@ -151,27 +168,47 @@ function App() {
             onDocumentSelect={handleDocumentSelect}
             onFileUpload={handleFileUpload}
             currentDocument={currentDocument}
+            onShowUploader={() => setShowUploader(true)}
           />
 
-          <PDFViewer 
-            currentDocument={currentDocument}
-          />
+          <div className="flex-1 flex">
+            <AdobePDFViewer 
+              selectedDocument={currentDocument}
+              onDocumentLoad={handleDocumentLoad}
+              onSectionSelect={handleSectionSelect}
+            />
 
-          <SmartConnections 
-            currentDocument={currentDocument}
-          />
+            <SmartConnections 
+              currentDocument={currentDocument}
+              recommendations={recommendations}
+              isProcessing={isProcessing}
+            />
+          </div>
         </div>
 
-        <PodcastButton onClick={handleAudioToggle} />
-        
-        {showAudioPlayer && (
-          <AudioPlayer 
-            onClose={() => setShowAudioPlayer(false)}
-            onPlayPause={handlePlayPause}
-            isPlaying={audioPlaying}
-            progress={audioProgress}
-          />
+        {/* PDF Uploader Modal */}
+        {showUploader && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  Build Your Document Library
+                </h2>
+                <button
+                  onClick={() => setShowUploader(false)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  ✕
+                </button>
+              </div>
+              <PDFUploader
+                onDocumentsProcessed={handleDocumentsProcessed}
+                userProfile={userProfile}
+              />
+            </div>
+          </div>
         )}
+
       </div>
     </DarkModeContext.Provider>
   );

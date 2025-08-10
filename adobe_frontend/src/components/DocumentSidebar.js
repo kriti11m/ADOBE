@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Upload, FileText } from 'lucide-react';
 import { useDarkMode } from '../App';
 
-const DocumentSidebar = ({ documents, onDocumentSelect, onFileUpload, currentDocument }) => {
+const DocumentSidebar = ({ documents, onDocumentSelect, onFileUpload, currentDocument, onShowUploader }) => {
   const [activeFilter, setActiveFilter] = useState('all');
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef(null);
@@ -71,7 +71,7 @@ const DocumentSidebar = ({ documents, onDocumentSelect, onFileUpload, currentDoc
         
         {/* Upload Area */}
         <div 
-          className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer mb-4 ${
+          className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer mb-2 ${
             isDragOver 
               ? isDarkMode 
                 ? 'border-blue-400 bg-blue-900/20' 
@@ -101,7 +101,21 @@ const DocumentSidebar = ({ documents, onDocumentSelect, onFileUpload, currentDoc
           />
         </div>
         
-        {/* Quick Filters */}
+        {/* Bulk Upload Button */}
+        <button
+          onClick={onShowUploader}
+          className={`w-full py-2 px-3 text-sm font-medium rounded-md transition-colors ${
+            isDarkMode
+              ? 'bg-blue-600 hover:bg-blue-700 text-white'
+              : 'bg-blue-600 hover:bg-blue-700 text-white'
+          }`}
+        >
+          📁 Bulk Upload & Process
+        </button>
+      </div>
+        
+      {/* Quick Filters */}
+      <div className="p-4 pt-0">
         <div className="flex space-x-2 mb-4">
           {[
             { key: 'all', label: 'All' },
