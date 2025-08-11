@@ -358,6 +358,23 @@ Content: {content}...
             if cleaned.endswith("```"):
                 cleaned = cleaned[:-3]
             
+            # Find the JSON part - handle cases where there's extra text after JSON
+            if '{' in cleaned and '}' in cleaned:
+                start_idx = cleaned.find('{')
+                # Find the matching closing brace
+                brace_count = 0
+                end_idx = start_idx
+                for i, char in enumerate(cleaned[start_idx:], start_idx):
+                    if char == '{':
+                        brace_count += 1
+                    elif char == '}':
+                        brace_count -= 1
+                        if brace_count == 0:
+                            end_idx = i + 1
+                            break
+                
+                cleaned = cleaned[start_idx:end_idx]
+            
             cleaned = cleaned.strip()
             
             # Parse JSON
@@ -365,10 +382,233 @@ Content: {content}...
             
         except json.JSONDecodeError as e:
             print(f"JSON parsing error: {e}")
-            print(f"Response text: {response_text[:500]}...")
+            print(f"Cleaned response text: {cleaned[:500]}...")
             
             # Return a basic structure if parsing fails
             return {
                 "error": "Failed to parse response",
                 "raw_response": response_text[:1000]
+            }
+
+    def generate_comprehensive_insights_with_cross_doc_analysis(self, part1b_output: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generate all types of insights with enhanced cross-document analysis using ALL sections
+        """
+        
+        try:
+            # Extract sections and metadata
+            primary_sections = part1b_output.get("extracted_sections", [])  # Top 3 relevant sections
+            all_sections = part1b_output.get("all_extracted_sections", [])  # ALL sections from database
+            metadata = part1b_output.get("metadata", {})
+            
+            persona = metadata.get("persona", "Analyst")
+            job = metadata.get("job_to_be_done", "Analyze content")
+            
+            print(f"🔍 Generating comprehensive insights with cross-document analysis:")
+            print(f"   - Primary sections (Part 1B): {len(primary_sections)}")
+            print(f"   - Total sections available: {len(all_sections)}")
+            
+            if not primary_sections:
+                return {
+                    "error": "No primary sections found in Part 1B output",
+                    "generated_at": datetime.now().isoformat()
+                }
+            
+            # Generate insights from primary sections (focused analysis)
+            insights = self.generate_key_insights(primary_sections, persona, job)
+            facts = self.generate_did_you_know_facts(primary_sections, persona)
+            
+            # Use ALL sections for cross-document analysis (contradictions & connections)
+            print("🔄 Analyzing contradictions and connections across ALL documents...")
+            contradictions_connections = self.find_contradictions_and_connections_enhanced(
+                primary_sections, all_sections, persona
+            )
+            
+            # Generate podcast script from primary sections but mention cross-doc insights
+            podcast_script = self.generate_podcast_script_enhanced(
+                primary_sections, contradictions_connections, persona, job
+            )
+            
+            return {
+                "key_insights": insights,
+                "did_you_know_facts": facts,
+                "contradictions_and_connections": contradictions_connections,
+                "podcast_script": podcast_script,
+                "metadata": {
+                    "generation_timestamp": datetime.now().isoformat(),
+                    "primary_sections_analyzed": len(primary_sections),
+                    "total_sections_analyzed": len(all_sections),
+                    "cross_document_analysis": True,
+                    "persona": persona,
+                    "job": job,
+                    "model": "gemini-1.5-flash"
+                }
+            }
+            
+        except Exception as e:
+            print(f"Error in comprehensive insights generation with cross-doc analysis: {e}")
+            return {
+                "key_insights": {"error": str(e)},
+                "did_you_know_facts": {"error": str(e)},
+                "contradictions_and_connections": {"error": str(e)},
+                "podcast_script": {"error": str(e)},
+                "generated_at": datetime.now().isoformat()
+            }
+
+    def find_contradictions_and_connections_enhanced(self, primary_sections: List[Dict], all_sections: List[Dict], persona: str) -> Dict[str, Any]:
+        """
+        Enhanced cross-document analysis: find contradictions and connections across ALL documents
+        """
+        
+        # Prepare context from ALL sections for comprehensive analysis
+        all_context = self._prepare_sections_context(all_sections)
+        primary_context = self._prepare_sections_context(primary_sections)
+        
+        prompt = f"""
+        You are analyzing documents for a {persona}. You have access to these SPECIFIC sections that are most relevant:
+
+        PRIMARY SECTIONS (focus area):
+        {primary_context}
+
+        COMPLETE DOCUMENT CORPUS (for cross-referencing):
+        {all_context}
+
+        Your task is to:
+        1. Find contradictions between the primary sections and ANY other sections in the complete corpus
+        2. Discover connections and patterns across ALL documents that relate to the primary sections
+        3. Identify counterpoints or alternative perspectives from the broader document set
+        4. Find inspirations and synergies across different documents
+
+        Focus on connections that span multiple documents and reveal insights that wouldn't be apparent from just the primary sections.
+
+        Format as JSON:
+        {{
+            "contradictions": [
+                {{
+                    "contradiction": "Clear description of what contradicts what",
+                    "explanation": "Why this matters and implications",
+                    "sections": ["document sections involved"],
+                    "significance": "Impact for the {persona}"
+                }}
+            ],
+            "connections": [
+                {{
+                    "connection": "How different documents/sections connect",
+                    "explanation": "What this connection reveals",
+                    "sections": ["all related sections"],
+                    "connection_type": "thematic/causal/complementary/contradictory",
+                    "insight": "Key insight from this connection"
+                }}
+            ],
+            "cross_document_insights": [
+                {{
+                    "insight": "Pattern or theme spanning multiple documents", 
+                    "evidence": "Supporting evidence from different docs",
+                    "implications": "What this means for the {persona}"
+                }}
+            ],
+            "inspiration_opportunities": [
+                {{
+                    "opportunity": "How ideas from different docs can be combined",
+                    "source_docs": ["documents providing the ideas"],
+                    "potential_application": "How the {persona} could use this"
+                }}
+            ]
+        }}
+        """
+        
+        try:
+            response = self.model.generate_content(prompt)
+            result = self._parse_json_response(response.text)
+            
+            return {
+                "contradictions": result.get("contradictions", []),
+                "connections": result.get("connections", []),
+                "cross_document_insights": result.get("cross_document_insights", []),
+                "inspiration_opportunities": result.get("inspiration_opportunities", []),
+                "analysis_scope": {
+                    "primary_sections": len(primary_sections),
+                    "total_sections_analyzed": len(all_sections),
+                    "cross_document_analysis": True
+                }
+            }
+            
+        except Exception as e:
+            print(f"Error in enhanced contradictions/connections analysis: {e}")
+            return {
+                "contradictions": [],
+                "connections": [],
+                "cross_document_insights": [],
+                "inspiration_opportunities": [],
+                "error": str(e)
+            }
+
+    def generate_podcast_script_enhanced(self, primary_sections: List[Dict], cross_doc_analysis: Dict, persona: str, job: str) -> Dict[str, Any]:
+        """
+        Generate podcast script that incorporates cross-document insights
+        """
+        
+        primary_context = self._prepare_sections_context(primary_sections)
+        connections = cross_doc_analysis.get("connections", [])
+        contradictions = cross_doc_analysis.get("contradictions", [])
+        insights = cross_doc_analysis.get("cross_document_insights", [])
+        
+        connections_summary = "\n".join([f"- {conn.get('connection', '')}: {conn.get('explanation', '')}" for conn in connections[:3]])
+        contradictions_summary = "\n".join([f"- {contr.get('contradiction', '')}: {contr.get('explanation', '')}" for contr in contradictions[:2]])
+        insights_summary = "\n".join([f"- {insight.get('insight', '')}" for insight in insights[:3]])
+        
+        prompt = f"""
+        Create an engaging podcast script for a {persona} focused on: {job}
+
+        PRIMARY CONTENT:
+        {primary_context}
+
+        CROSS-DOCUMENT INSIGHTS DISCOVERED:
+        Connections found: {connections_summary}
+        
+        Contradictions found: {contradictions_summary}
+        
+        Broader insights: {insights_summary}
+
+        Create a 5-7 minute podcast script that:
+        1. Introduces the topic and why it matters for a {persona}
+        2. Discusses the key findings from the primary sections
+        3. Reveals the interesting cross-document connections and contradictions
+        4. Explores what these patterns mean for the {persona}
+        5. Ends with actionable insights
+
+        Make it conversational, engaging, and highlight the "aha moments" from the cross-document analysis.
+
+        Format as JSON:
+        {{
+            "title": "Engaging title for the podcast episode",
+            "description": "Brief description of what listeners will learn",
+            "estimated_duration": "5-7 minutes",
+            "script": "Full conversational script with natural transitions",
+            "key_takeaways": ["3-5 main points listeners should remember"],
+            "cross_document_highlights": ["Specific insights that came from analyzing multiple documents"]
+        }}
+        """
+        
+        try:
+            response = self.model.generate_content(prompt)
+            result = self._parse_json_response(response.text)
+            
+            return {
+                "title": result.get("title", f"Insights on {job}"),
+                "description": result.get("description", ""),
+                "estimated_duration": result.get("estimated_duration", "5-7 minutes"),
+                "script": result.get("script", ""),
+                "key_takeaways": result.get("key_takeaways", []),
+                "cross_document_highlights": result.get("cross_document_highlights", []),
+                "enhanced_with_cross_doc_analysis": True
+            }
+            
+        except Exception as e:
+            print(f"Error generating enhanced podcast script: {e}")
+            return {
+                "title": f"Insights on {job}",
+                "description": "Podcast generation failed",
+                "script": "Unable to generate script due to an error.",
+                "error": str(e)
             }

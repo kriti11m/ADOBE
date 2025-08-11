@@ -7,20 +7,106 @@ import TableOfContents from './TableOfContents';
 const SmartConnections = ({ 
   currentDocument, 
   recommendations, 
+  currentSessionId, // Add session ID prop
   isProcessing, 
   onGetRecommendations, 
   activeCollection, 
   onNavigateToSection,
   pdfStructure,
   isExtractingStructure,
-  currentSection 
+  currentSection,
+  userProfile // Add userProfile prop
 }) => {
   const [view, setView] = useState('bulb'); // 'bulb', 'connections', 'insights'
   const [selectedSection, setSelectedSection] = useState(null);
+  const [generatedInsights, setGeneratedInsights] = useState(null);
+  const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
+  const [insightsError, setInsightsError] = useState(null);
   const { isDarkMode } = useDarkMode();
 
   // Use passed recommendations or empty array
   const relatedSections = recommendations || [];
+
+  // Generate insights from Part 1B recommendations
+  const handleGenerateInsights = async () => {
+    if (!recommendations || recommendations.length === 0) {
+      setInsightsError('No recommendations available. Please run Smart Connections first.');
+      return;
+    }
+
+    if (!userProfile || !userProfile.role || !userProfile.task) {
+      setInsightsError('User profile is required to generate insights.');
+      return;
+    }
+
+    setIsGeneratingInsights(true);
+    setInsightsError(null);
+    
+    try {
+      console.log('🔄 Generating insights from recommendations:', recommendations);
+      console.log('🔄 Using user profile:', userProfile);
+      
+      const response = await backendService.generateInsightsFromRecommendations(
+        recommendations,
+        userProfile.role,
+        userProfile.task,
+        currentSessionId // Pass session ID for cross-document analysis
+      );
+      
+      console.log('✅ Generated insights response:', response);
+      
+      // Extract insights from the response (backend returns {insights: {...}, metadata: {...}})
+      const insights = response.insights || response;
+      console.log('✅ Extracted insights:', insights);
+      
+      setGeneratedInsights(insights);
+      setView('insights');
+      
+    } catch (error) {
+      console.error('❌ Error generating insights:', error);
+      setInsightsError('Failed to generate insights. Please try again.');
+    } finally {
+      setIsGeneratingInsights(false);
+    }
+  };
+
+  // Generate insights from a single section
+  const handleGenerateSectionInsights = async (section) => {
+    if (!userProfile || !userProfile.role || !userProfile.task) {
+      setInsightsError('User profile is required to generate insights.');
+      return;
+    }
+
+    setIsGeneratingInsights(true);
+    setInsightsError(null);
+    
+    try {
+      console.log('🔄 Generating insights from single section:', section);
+      console.log('🔄 Using user profile:', userProfile);
+      
+      const response = await backendService.generateInsightsFromRecommendations(
+        [section], // Pass only the selected section
+        userProfile.role,
+        userProfile.task,
+        currentSessionId // Pass session ID for cross-document analysis
+      );
+      
+      console.log('✅ Generated section insights response:', response);
+      
+      // Extract insights from the response
+      const insights = response.insights || response;
+      console.log('✅ Extracted section insights:', insights);
+      
+      setGeneratedInsights(insights);
+      setView('insights');
+      
+    } catch (error) {
+      console.error('❌ Error generating section insights:', error);
+      setInsightsError('Failed to generate insights for this section. Please try again.');
+    } finally {
+      setIsGeneratingInsights(false);
+    }
+  };
 
   const handleSmartConnectionsClick = () => {
     if (activeCollection || (currentDocument && onGetRecommendations)) {
@@ -99,24 +185,20 @@ const SmartConnections = ({
         ? 'bg-purple-900/50 border-purple-700 text-purple-300 hover:bg-purple-800/50' 
         : 'bg-purple-50 border-purple-200 text-purple-900 hover:bg-purple-100',
       yellow: isDarkMode 
-        ? 'bg-yellow-900/50 border-yellow-700 text-yellow-300' 
-        : 'bg-yellow-50 border-yellow-200 text-yellow-900',
-      red: isDarkMode 
-        ? 'bg-red-900/50 border-red-700 text-red-300' 
-        : 'bg-red-50 border-red-200 text-red-900'
+        ? 'bg-yellow-900/50 border-yellow-700 text-yellow-300 hover:bg-yellow-800/50' 
+        : 'bg-yellow-50 border-yellow-200 text-yellow-900 hover:bg-yellow-100',
     };
-    return colorMap[color] || (isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-900');
+    return colorMap[color] || colorMap.blue;
   };
 
   const getTextColorClasses = (color) => {
     const colorMap = {
-      blue: isDarkMode ? 'text-blue-300' : 'text-blue-800',
-      green: isDarkMode ? 'text-green-300' : 'text-green-800',
-      purple: isDarkMode ? 'text-purple-300' : 'text-purple-800',
-      yellow: isDarkMode ? 'text-yellow-300' : 'text-yellow-800',
-      red: isDarkMode ? 'text-red-300' : 'text-red-800'
+      blue: isDarkMode ? 'text-blue-200' : 'text-blue-800',
+      green: isDarkMode ? 'text-green-200' : 'text-green-800',
+      purple: isDarkMode ? 'text-purple-200' : 'text-purple-800',
+      yellow: isDarkMode ? 'text-yellow-200' : 'text-yellow-800',
     };
-    return colorMap[color] || (isDarkMode ? 'text-gray-300' : 'text-gray-800');
+    return colorMap[color] || colorMap.blue;
   };
 
   // Main view - always show bulb, outline is now in separate panel
@@ -252,13 +334,37 @@ const SmartConnections = ({
               >
                 <div className="flex items-start justify-between mb-2">
                   <h4 className="font-medium text-sm truncate">{section.document}</h4>
-                  <span className={`text-xs px-2 py-1 rounded ml-2 flex-shrink-0 ${
-                    isDarkMode 
-                      ? 'bg-gray-700 text-gray-300' 
-                      : 'bg-gray-100 text-gray-700'
-                  }`}>
-                    {section.page}
-                  </span>
+                  <div className="flex items-center space-x-2 ml-2 flex-shrink-0">
+                    {/* Lightbulb icon for generating section insights */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleGenerateSectionInsights(section);
+                      }}
+                      className={`p-1 rounded-full transition-colors ${
+                        isDarkMode 
+                          ? 'hover:bg-yellow-800 text-yellow-400 hover:text-yellow-300' 
+                          : 'hover:bg-yellow-100 text-yellow-600 hover:text-yellow-700'
+                      }`}
+                      title="Generate insights for this section"
+                      disabled={isGeneratingInsights}
+                    >
+                      {isGeneratingInsights ? (
+                        <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M9 21c0 .5.4 1 1 1h4c.6 0 1-.5 1-1v-1H9v1zm3-19C8.1 2 5 5.1 5 9c0 2.4 1.2 4.5 3 5.7V17c0 .5.4 1 1 1h6c.6 0 1-.5 1-1v-2.3c1.8-1.3 3-3.4 3-5.7 0-3.9-3.1-7-7-7z"/>
+                        </svg>
+                      )}
+                    </button>
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      isDarkMode 
+                        ? 'bg-gray-700 text-gray-300' 
+                        : 'bg-gray-100 text-gray-700'
+                    }`}>
+                      {section.page}
+                    </span>
+                  </div>
                 </div>
                 <div className="flex items-center mb-2">
                   <span className={`text-xs px-2 py-1 rounded mr-2 ${
@@ -311,15 +417,35 @@ const SmartConnections = ({
           isDarkMode ? 'border-gray-700' : 'border-gray-200'
         }`}>
           <button 
-            onClick={() => setView('insights')}
+            onClick={handleGenerateInsights}
+            disabled={isGeneratingInsights}
             className={`w-full text-xs py-2 px-3 rounded transition-colors ${
+              isGeneratingInsights ? 'opacity-50 cursor-not-allowed' : ''
+            } ${
               isDarkMode 
                 ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' 
                 : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
             }`}
           >
-            💡 View AI Insights
+            {isGeneratingInsights ? (
+              <div className="flex items-center justify-center space-x-1">
+                <RefreshCw className="w-3 h-3 animate-spin" />
+                <span>Generating...</span>
+              </div>
+            ) : (
+              '💡 Generate AI Insights'
+            )}
           </button>
+          
+          {insightsError && (
+            <div className={`mt-2 p-2 rounded text-xs ${
+              isDarkMode 
+                ? 'bg-red-900/50 border border-red-700 text-red-300' 
+                : 'bg-red-50 border border-red-200 text-red-900'
+            }`}>
+              ⚠️ {insightsError}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -478,26 +604,406 @@ const SmartConnections = ({
           </div>
         </div>
         
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {insights.map((insight, index) => (
-            <div key={index} className={`border rounded-lg p-3 ${getColorClasses(insight.color)}`}>
-              <div className="flex items-center mb-2">
-                <span className="text-lg mr-2">{insight.icon}</span>
-                <h4 className="font-medium text-sm">{insight.title}</h4>
-              </div>
-              {insight.items ? (
-                <ul className={`text-sm space-y-1 ${getTextColorClasses(insight.color)}`}>
-                  {insight.items.map((item, itemIndex) => (
-                    <li key={itemIndex}>• {item}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p className={`text-sm ${getTextColorClasses(insight.color)}`}>
-                  {insight.content}
-                </p>
-              )}
+        {/* Cross-document analysis indicator */}
+        {generatedInsights?.metadata?.cross_document_analysis && (
+          <div className={`mx-4 mb-2 p-2 rounded text-xs ${
+            isDarkMode ? 'bg-blue-900 text-blue-200' : 'bg-blue-50 text-blue-700'
+          }`}>
+            <div className="flex items-center space-x-2">
+              <span>🔗</span>
+              <span className="font-medium">Enhanced Cross-Document Analysis</span>
             </div>
-          ))}
+            <p className="text-xs opacity-75 mt-1">
+              Analyzed {generatedInsights.metadata.total_sections_analyzed} sections across all documents for deeper insights
+            </p>
+          </div>
+        )}
+        
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {!generatedInsights ? (
+            <div className={`text-center py-8 ${
+              isDarkMode ? 'text-gray-400' : 'text-gray-500'
+            }`}>
+              <div className="text-4xl mb-4">💡</div>
+              <p className="text-sm">No insights generated yet.</p>
+              <p className="text-xs mt-1">Click "Generate AI Insights" to analyze your documents.</p>
+            </div>
+          ) : (
+            <>
+              {/* Debug info - remove this later */}
+              {process.env.NODE_ENV === 'development' && (
+                <div className={`text-xs p-2 rounded border ${
+                  isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-100 border-gray-200 text-gray-600'
+                }`}>
+                  <p>Debug keys: {JSON.stringify(Object.keys(generatedInsights))}</p>
+                  <p>Key insights type: {typeof generatedInsights.key_insights} | Length: {generatedInsights.key_insights?.length || 'undefined'}</p>
+                  <p>Did you know type: {typeof generatedInsights.did_you_know_facts} | Length: {generatedInsights.did_you_know_facts?.length || 'undefined'}</p>
+                  <p>Connections type: {typeof generatedInsights.contradictions_and_connections} | Length: {generatedInsights.contradictions_and_connections?.length || 'undefined'}</p>
+                  <p>First key insight: {JSON.stringify(generatedInsights.key_insights?.[0])}</p>
+                </div>
+              )}
+
+              {/* Key Insights - with proper object handling */}
+              {generatedInsights.key_insights && (
+                <div className={`border rounded-lg p-3 ${getColorClasses('blue')}`}>
+                  <div className="flex items-center mb-2">
+                    <span className="text-lg mr-2">🔑</span>
+                    <h4 className="font-medium text-sm">Key Insights</h4>
+                  </div>
+                  <div className={`text-sm space-y-1 ${getTextColorClasses('blue')}`}>
+                    {generatedInsights.key_insights.error ? (
+                      <div className="text-red-500 text-xs">
+                        <p className="font-medium">⚠️ API Error</p>
+                        <p className="text-xs">{generatedInsights.key_insights.error}</p>
+                      </div>
+                    ) : Array.isArray(generatedInsights.key_insights.insights) && generatedInsights.key_insights.insights.length > 0 ? (
+                      <ul className="space-y-2">
+                        {generatedInsights.key_insights.insights.map((insight, index) => (
+                          <li key={index} className="border-l-2 border-blue-300 pl-2">
+                            {typeof insight === 'string' ? (
+                              <span>• {insight}</span>
+                            ) : (
+                              <div>
+                                <p className="font-medium text-xs">{insight.title || `Insight ${index + 1}`}</p>
+                                <p className="text-xs">{insight.description || JSON.stringify(insight)}</p>
+                              </div>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : Array.isArray(generatedInsights.key_insights) ? (
+                      <ul className="space-y-2">
+                        {generatedInsights.key_insights.map((insight, index) => (
+                          <li key={index} className="border-l-2 border-blue-300 pl-2">
+                            {typeof insight === 'string' ? (
+                              <span>• {insight}</span>
+                            ) : (
+                              <div>
+                                <p className="font-medium text-xs">{insight.title || `Insight ${index + 1}`}</p>
+                                <p className="text-xs">{insight.description || JSON.stringify(insight)}</p>
+                              </div>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p>No key insights available</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Did You Know Facts - with proper object handling */}
+              {generatedInsights.did_you_know_facts && (
+                <div className={`border rounded-lg p-3 ${getColorClasses('yellow')}`}>
+                  <div className="flex items-center mb-2">
+                    <span className="text-lg mr-2">💭</span>
+                    <h4 className="font-medium text-sm">Did You Know?</h4>
+                  </div>
+                  <div className={`text-sm space-y-2 ${getTextColorClasses('yellow')}`}>
+                    {generatedInsights.did_you_know_facts.error ? (
+                      <div className="text-red-500 text-xs">
+                        <p className="font-medium">⚠️ API Error</p>
+                        <p className="text-xs">{generatedInsights.did_you_know_facts.error}</p>
+                      </div>
+                    ) : Array.isArray(generatedInsights.did_you_know_facts.facts) && generatedInsights.did_you_know_facts.facts.length > 0 ? (
+                      <div className="space-y-3">
+                        {generatedInsights.did_you_know_facts.facts.slice(0, 3).map((fact, index) => (
+                          <div key={index} className="border-l-2 border-yellow-300 pl-3">
+                            {typeof fact === 'string' ? (
+                              <p className="text-sm">• {fact}</p>
+                            ) : fact.fact ? (
+                              <div>
+                                <p className="text-sm font-medium">• {fact.fact}</p>
+                                {fact.explanation && (
+                                  <p className="text-xs opacity-75 mt-1 italic">{fact.explanation}</p>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-sm">• {JSON.stringify(fact)}</p>
+                            )}
+                          </div>
+                        ))}
+                        {generatedInsights.did_you_know_facts.facts.length > 3 && (
+                          <p className="text-xs opacity-60">+ {generatedInsights.did_you_know_facts.facts.length - 3} more facts...</p>
+                        )}
+                      </div>
+                    ) : Array.isArray(generatedInsights.did_you_know_facts) ? (
+                      <div className="space-y-3">
+                        {generatedInsights.did_you_know_facts.slice(0, 3).map((fact, index) => (
+                          <div key={index} className="border-l-2 border-yellow-300 pl-3">
+                            {typeof fact === 'string' ? (
+                              <p className="text-sm">• {fact}</p>
+                            ) : fact.fact ? (
+                              <div>
+                                <p className="text-sm font-medium">• {fact.fact}</p>
+                                {fact.explanation && (
+                                  <p className="text-xs opacity-75 mt-1 italic">{fact.explanation}</p>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-sm">• {JSON.stringify(fact)}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p>No facts available</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Connections - with proper object handling */}
+              {generatedInsights.contradictions_and_connections && (
+                <div className={`border rounded-lg p-3 ${getColorClasses('purple')}`}>
+                  <div className="flex items-center mb-2">
+                    <span className="text-lg mr-2">🔗</span>
+                    <h4 className="font-medium text-sm">Connections & Contradictions</h4>
+                  </div>
+                  <div className={`text-sm space-y-1 ${getTextColorClasses('purple')}`}>
+                    {generatedInsights.contradictions_and_connections.error ? (
+                      <div className="text-red-500 text-xs">
+                        <p className="font-medium">⚠️ API Error</p>
+                        <p className="text-xs">{generatedInsights.contradictions_and_connections.error}</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {/* Handle connections array */}
+                        {Array.isArray(generatedInsights.contradictions_and_connections.connections) && generatedInsights.contradictions_and_connections.connections.length > 0 && (
+                          <div>
+                            <p className="font-medium text-xs mb-2">Connections:</p>
+                            <div className="space-y-3">
+                              {generatedInsights.contradictions_and_connections.connections.slice(0, 3).map((connection, index) => (
+                                <div key={index} className="border-l-2 border-purple-300 pl-3">
+                                  {typeof connection === 'string' ? (
+                                    <p className="text-sm">• {connection}</p>
+                                  ) : connection.connection ? (
+                                    <div>
+                                      <p className="text-sm font-medium">• {connection.connection}</p>
+                                      {connection.explanation && (
+                                        <p className="text-xs opacity-75 mt-1 italic">{connection.explanation}</p>
+                                      )}
+                                      {connection.sections && Array.isArray(connection.sections) && (
+                                        <p className="text-xs opacity-60 mt-1">
+                                          Related sections: {connection.sections.join(', ')}
+                                        </p>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div>
+                                      <p className="font-medium text-xs">{connection.title || `Connection ${index + 1}`}</p>
+                                      <p className="text-xs">{connection.description || JSON.stringify(connection)}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                              {generatedInsights.contradictions_and_connections.connections.length > 3 && (
+                                <p className="text-xs opacity-60">+ {generatedInsights.contradictions_and_connections.connections.length - 3} more connections...</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Handle contradictions array */}
+                        {Array.isArray(generatedInsights.contradictions_and_connections.contradictions) && generatedInsights.contradictions_and_connections.contradictions.length > 0 && (
+                          <div>
+                            <p className="font-medium text-xs mb-2">Contradictions:</p>
+                            <div className="space-y-3">
+                              {generatedInsights.contradictions_and_connections.contradictions.slice(0, 3).map((contradiction, index) => (
+                                <div key={index} className="border-l-2 border-red-300 pl-3">
+                                  {typeof contradiction === 'string' ? (
+                                    <p className="text-sm">• {contradiction}</p>
+                                  ) : contradiction.contradiction ? (
+                                    <div>
+                                      <p className="text-sm font-medium">• {contradiction.contradiction}</p>
+                                      {contradiction.explanation && (
+                                        <p className="text-xs opacity-75 mt-1 italic">{contradiction.explanation}</p>
+                                      )}
+                                      {contradiction.sections && Array.isArray(contradiction.sections) && (
+                                        <p className="text-xs opacity-60 mt-1">
+                                          Related sections: {contradiction.sections.join(', ')}
+                                        </p>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div>
+                                      <p className="font-medium text-xs">{contradiction.title || `Contradiction ${index + 1}`}</p>
+                                      <p className="text-xs">{contradiction.description || JSON.stringify(contradiction)}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                              {generatedInsights.contradictions_and_connections.contradictions.length > 3 && (
+                                <p className="text-xs opacity-60">+ {generatedInsights.contradictions_and_connections.contradictions.length - 3} more contradictions...</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Cross-Document Insights */}
+                        {Array.isArray(generatedInsights.contradictions_and_connections.cross_document_insights) && generatedInsights.contradictions_and_connections.cross_document_insights.length > 0 && (
+                          <div className="mt-4">
+                            <p className="font-medium text-xs mb-2 text-blue-600">Cross-Document Insights:</p>
+                            <div className="space-y-3">
+                              {generatedInsights.contradictions_and_connections.cross_document_insights.slice(0, 3).map((insight, index) => (
+                                <div key={index} className="border-l-2 border-blue-300 pl-3 bg-blue-50 p-2 rounded">
+                                  {typeof insight === 'string' ? (
+                                    <p className="text-sm">• {insight}</p>
+                                  ) : (
+                                    <div>
+                                      <p className="text-sm font-medium text-blue-800">🔗 {insight.insight}</p>
+                                      {insight.evidence && (
+                                        <p className="text-xs text-blue-600 mt-1">{insight.evidence}</p>
+                                      )}
+                                      {insight.implications && (
+                                        <p className="text-xs text-blue-500 mt-1 italic">💡 {insight.implications}</p>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Inspiration Opportunities */}
+                        {Array.isArray(generatedInsights.contradictions_and_connections.inspiration_opportunities) && generatedInsights.contradictions_and_connections.inspiration_opportunities.length > 0 && (
+                          <div className="mt-4">
+                            <p className="font-medium text-xs mb-2 text-green-600">Inspiration Opportunities:</p>
+                            <div className="space-y-3">
+                              {generatedInsights.contradictions_and_connections.inspiration_opportunities.slice(0, 3).map((opportunity, index) => (
+                                <div key={index} className="border-l-2 border-green-300 pl-3 bg-green-50 p-2 rounded">
+                                  {typeof opportunity === 'string' ? (
+                                    <p className="text-sm">• {opportunity}</p>
+                                  ) : (
+                                    <div>
+                                      <p className="text-sm font-medium text-green-800">✨ {opportunity.opportunity}</p>
+                                      {opportunity.source_docs && Array.isArray(opportunity.source_docs) && (
+                                        <p className="text-xs text-green-600 mt-1">📚 Sources: {opportunity.source_docs.join(', ')}</p>
+                                      )}
+                                      {opportunity.potential_application && (
+                                        <p className="text-xs text-green-500 mt-1 italic">🎯 {opportunity.potential_application}</p>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Fallback for direct array */}
+                        {Array.isArray(generatedInsights.contradictions_and_connections) && (
+                          <ul className="space-y-1">
+                            {generatedInsights.contradictions_and_connections.map((item, index) => (
+                              <li key={index} className="border-l-2 border-purple-300 pl-2">
+                                {typeof item === 'string' ? (
+                                  <span>• {item}</span>
+                                ) : (
+                                  <div>
+                                    <p className="font-medium text-xs">{item.title || `Item ${index + 1}`}</p>
+                                    <p className="text-xs">{item.description || JSON.stringify(item)}</p>
+                                  </div>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        
+                        {/* No data message */}
+                        {!generatedInsights.contradictions_and_connections.connections?.length && 
+                         !generatedInsights.contradictions_and_connections.contradictions?.length && 
+                         !Array.isArray(generatedInsights.contradictions_and_connections) && (
+                          <p>No connections or contradictions found</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Podcast Script - with error handling */}
+              {generatedInsights.podcast_script && (
+                <div className={`border rounded-lg p-3 ${getColorClasses('green')}`}>
+                  <div className="flex items-center mb-2">
+                    <span className="text-lg mr-2">🎙️</span>
+                    <h4 className="font-medium text-sm">Podcast Script</h4>
+                  </div>
+                  <div className={`text-sm ${getTextColorClasses('green')} space-y-2`}>
+                    {generatedInsights.podcast_script.error ? (
+                      <div className="text-red-500 text-xs">
+                        <p className="font-medium">⚠️ API Quota Exceeded</p>
+                        <p>You've reached the daily limit for Gemini API requests.</p>
+                        <p>Please try again tomorrow or upgrade your API plan.</p>
+                      </div>
+                    ) : (
+                      <>
+                        {generatedInsights.podcast_script.title && (
+                          <p className="font-medium">{generatedInsights.podcast_script.title}</p>
+                        )}
+                        {generatedInsights.podcast_script.duration_estimate && (
+                          <p className="text-xs opacity-75">Duration: {generatedInsights.podcast_script.duration_estimate}</p>
+                        )}
+                        {generatedInsights.podcast_script.script && Array.isArray(generatedInsights.podcast_script.script) && generatedInsights.podcast_script.script.length > 0 && (
+                          <div>
+                            <p className="text-xs font-medium mb-1">Preview:</p>
+                            <p className="text-xs italic">"{generatedInsights.podcast_script.script[0]?.content?.substring(0, 150)}..."</p>
+                          </div>
+                        )}
+                        <button 
+                          className="mt-2 text-xs underline opacity-75 hover:opacity-100"
+                          onClick={() => console.log('Full podcast script:', generatedInsights.podcast_script)}
+                        >
+                          View full script in console
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Regenerate button */}
+              <div className="pt-2">
+                <button 
+                  onClick={handleGenerateInsights}
+                  disabled={isGeneratingInsights}
+                  className={`w-full text-xs py-2 px-3 rounded transition-colors ${
+                    isGeneratingInsights ? 'opacity-50 cursor-not-allowed' : ''
+                  } ${
+                    isDarkMode 
+                      ? 'bg-gray-700 hover:bg-gray-600 text-gray-300 border border-gray-600' 
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200'
+                  }`}
+                >
+                  {isGeneratingInsights ? (
+                    <div className="flex items-center justify-center space-x-1">
+                      <RefreshCw className="w-3 h-3 animate-spin" />
+                      <span>Regenerating...</span>
+                    </div>
+                  ) : (
+                    '🔄 Regenerate Insights'
+                  )}
+                </button>
+              </div>
+
+              {/* Fallback: Show raw insights if structure is unexpected */}
+              {!generatedInsights.key_insights && 
+               !generatedInsights.did_you_know_facts && 
+               !generatedInsights.contradictions_and_connections && 
+               !generatedInsights.podcast_script && (
+                <div className={`border rounded-lg p-3 ${getColorClasses('blue')}`}>
+                  <div className="flex items-center mb-2">
+                    <span className="text-lg mr-2">🔍</span>
+                    <h4 className="font-medium text-sm">Generated Insights</h4>
+                  </div>
+                  <pre className={`text-xs whitespace-pre-wrap ${getTextColorClasses('blue')}`}>
+                    {JSON.stringify(generatedInsights, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
     );

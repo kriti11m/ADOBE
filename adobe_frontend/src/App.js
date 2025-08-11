@@ -8,6 +8,8 @@ import SmartConnections from './components/SmartConnections';
 import PDFUploader from './components/PDFUploader';
 import CollectionUploader from './components/CollectionUploader';
 import HistoryPanel from './components/HistoryPanel';
+import PodcastButton from './components/PodcastButton';
+import { Headphones } from 'lucide-react';
 import backendService from './services/backendService';
 import part1aService from './services/part1aService';
 import historyService from './services/historyService';
@@ -30,6 +32,7 @@ function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [recommendations, setRecommendations] = useState([]);
+  const [currentSessionId, setCurrentSessionId] = useState(null); // Store session ID for insights
   const [showUploader, setShowUploader] = useState(false);
   const [documents, setDocuments] = useState([]);
   const [collections, setCollections] = useState([]);
@@ -37,6 +40,12 @@ function App() {
   const [showCollectionUploader, setShowCollectionUploader] = useState(false);
   const [highlightedSections, setHighlightedSections] = useState([]);
   const [analyzedCollectionId, setAnalyzedCollectionId] = useState(null); // Track which collection was analyzed
+  const [showPodcastModal, setShowPodcastModal] = useState(false);
+  const [podcastData, setPodcastData] = useState(null);
+  const [audioBlob, setAudioBlob] = useState(null);
+  const [audioUrl, setAudioUrl] = useState(null);
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [availableTTSEngines, setAvailableTTSEngines] = useState(null);
   
   // Part 1A Integration - Document Structure
   const [pdfStructure, setPdfStructure] = useState(null);
@@ -111,7 +120,7 @@ function App() {
     if (document.file || document.url) {
       setIsExtractingStructure(true);
       try {
-        const structure = await part1aService.extractPdfStructure(document);
+        const structure = await part1aService.extractStructure(document.file || document);
         setPdfStructure(structure);
       } catch (error) {
         console.error('Error extracting PDF structure:', error);
@@ -216,12 +225,23 @@ function App() {
       try {
         // Use all documents from the active collection
         const collectionFiles = activeCollection.documents.map(doc => doc.file);
-        const recs = await backendService.getRecommendations(
+        const result = await backendService.getRecommendations(
           collectionFiles,
           userProfile.role || 'Researcher',
           userProfile.task || 'Analyze document content'
         );
+        
+        // Handle new return format with session_id
+        const recs = result.recommendations || result; // Support both old and new format
+        const sessionId = result.session_id;
+        
         setRecommendations(recs);
+        
+        // Store session ID for cross-document insights
+        if (sessionId) {
+          setCurrentSessionId(sessionId);
+          console.log('📊 Stored session ID from collection analysis:', sessionId);
+        }
         
         // Mark this collection as analyzed
         setAnalyzedCollectionId(activeCollection.id);
@@ -247,12 +267,23 @@ function App() {
       // Only analyze individual documents if they're NOT from a collection
       setIsProcessing(true);
       try {
-        const recs = await backendService.getRecommendations(
+        const result = await backendService.getRecommendations(
           [document.file],
           userProfile.role || 'Researcher',
           userProfile.task || 'Analyze document content'
         );
+        
+        // Handle new return format with session_id
+        const recs = result.recommendations || result; // Support both old and new format
+        const sessionId = result.session_id;
+        
         setRecommendations(recs);
+        
+        // Store session ID for cross-document insights
+        if (sessionId) {
+          setCurrentSessionId(sessionId);
+          console.log('📊 Stored session ID from document analysis:', sessionId);
+        }
         
         // Clear collection analysis cache since this is individual analysis
         setAnalyzedCollectionId(null);
@@ -366,6 +397,12 @@ function App() {
   const handleDocumentsProcessed = (processedData) => {
     console.log('Documents processed:', processedData);
     
+    // Store session ID for cross-document insights
+    if (processedData.session_id) {
+      setCurrentSessionId(processedData.session_id);
+      console.log('📊 Stored session ID for cross-document analysis:', processedData.session_id);
+    }
+    
     // Add processed documents to library
     const newDocuments = processedData.structures.map(({ file, structure }) => ({
       id: file.name + '_' + Date.now(),
@@ -389,6 +426,91 @@ function App() {
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
   };
+
+  // Handle podcast generation
+  const handlePodcastGeneration = (podcastData) => {
+    console.log('🎧 Podcast generated:', podcastData);
+    setPodcastData(podcastData);
+    setShowPodcastModal(true);
+    // Clear previous audio when new podcast is generated
+    setAudioBlob(null);
+    setAudioUrl(null);
+  };
+
+  // Handle audio generation from podcast script
+  const handleGenerateAudio = async (ttsEngine = 'gtts', voiceSettings = null) => {
+    if (!podcastData?.podcast_script) {
+      console.error('No podcast script available for audio generation');
+      return;
+    }
+
+    setIsGeneratingAudio(true);
+    try {
+      console.log('🎵 Generating audio with engine:', ttsEngine);
+      
+      const audioBlob = await backendService.generatePodcastAudio(
+        podcastData.podcast_script,
+        ttsEngine,
+        voiceSettings
+      );
+
+      if (audioBlob) {
+        setAudioBlob(audioBlob);
+        
+        // Create URL for audio playback
+        const audioUrl = URL.createObjectURL(audioBlob);
+        setAudioUrl(audioUrl);
+        
+        console.log('✅ Audio generated successfully');
+      }
+    } catch (error) {
+      console.error('❌ Error generating audio:', error);
+      // You could show an error toast here
+    } finally {
+      setIsGeneratingAudio(false);
+    }
+  };
+
+  // Download generated audio
+  const handleDownloadAudio = () => {
+    if (!audioBlob) {
+      console.error('No audio to download');
+      return;
+    }
+
+    const url = URL.createObjectURL(audioBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `podcast_${Date.now()}.mp3`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Load available TTS engines on component mount
+  useEffect(() => {
+    const loadTTSEngines = async () => {
+      try {
+        const engines = await backendService.getAvailableTTSEngines();
+        setAvailableTTSEngines(engines);
+        console.log('🎵 Available TTS engines:', engines);
+      } catch (error) {
+        console.error('Error loading TTS engines:', error);
+      }
+    };
+
+    loadTTSEngines();
+  }, []);
+
+  // Cleanup audio URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+    };
+  }, [audioUrl]);
 
   // History Panel handlers
   const handleOpenHistory = () => {
@@ -480,6 +602,7 @@ function App() {
             <SmartConnections 
               currentDocument={currentDocument}
               recommendations={recommendations}
+              currentSessionId={currentSessionId}
               isProcessing={isProcessing}
               onGetRecommendations={handleGetRecommendations}
               activeCollection={activeCollection}
@@ -487,6 +610,7 @@ function App() {
               pdfStructure={pdfStructure}
               isExtractingStructure={isExtractingStructure}
               currentSection={currentSection}
+              userProfile={userProfile}
             />
           </div>
         </div>
@@ -543,6 +667,242 @@ function App() {
           onClose={handleCloseHistory}
           onLoadSession={handleLoadSession}
         />
+
+        {/* Podcast Button */}
+        <div className="fixed bottom-6 right-6 z-40">
+          <PodcastButton
+            onClick={handlePodcastGeneration}
+            currentDocument={currentDocument}
+            selectedSection={currentSection}
+            userProfile={userProfile}
+            recommendations={recommendations}
+            currentSessionId={currentSessionId}
+          />
+        </div>
+
+        {/* Podcast Modal */}
+        {showPodcastModal && podcastData && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className={`w-full max-w-4xl max-h-[90vh] m-4 rounded-lg shadow-xl ${
+              isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+            }`}>
+              <div className={`p-6 border-b ${
+                isDarkMode ? 'border-gray-700' : 'border-gray-200'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Headphones className={`w-8 h-8 ${
+                      isDarkMode ? 'text-green-400' : 'text-green-600'
+                    }`} />
+                    <div>
+                      <h2 className={`text-2xl font-bold ${
+                        isDarkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        {podcastData.podcast_script?.title || 'AI-Generated Podcast'}
+                      </h2>
+                      <p className={`text-sm ${
+                        isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
+                        {podcastData.podcast_script?.estimated_duration || '5-7 minutes'} • 
+                        {podcastData.cross_document_enhanced ? ' Enhanced Cross-Document Analysis' : ' Standard Analysis'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowPodcastModal(false)}
+                    className={`p-2 rounded-full transition-colors ${
+                      isDarkMode 
+                        ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-300' 
+                        : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              
+              <div className="p-6 overflow-y-auto max-h-[70vh]">
+                {/* Podcast Description */}
+                {podcastData.podcast_script?.description && (
+                  <div className="mb-6">
+                    <h3 className={`text-lg font-semibold mb-2 ${
+                      isDarkMode ? 'text-white' : 'text-gray-900'
+                    }`}>About This Episode</h3>
+                    <p className={`${
+                      isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      {podcastData.podcast_script.description}
+                    </p>
+                  </div>
+                )}
+
+                {/* Podcast Script */}
+                <div className="mb-6">
+                  <h3 className={`text-lg font-semibold mb-3 ${
+                    isDarkMode ? 'text-white' : 'text-gray-900'
+                  }`}>Podcast Script</h3>
+                  <div className={`p-4 rounded-lg ${
+                    isDarkMode ? 'bg-gray-700' : 'bg-gray-50'
+                  }`}>
+                    <div className={`prose prose-sm max-w-none ${
+                      isDarkMode ? 'prose-invert' : 'prose-gray'
+                    }`}>
+                      <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
+                        {podcastData.podcast_script?.script || 'No script available'}
+                      </pre>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Key Takeaways */}
+                {podcastData.podcast_script?.key_takeaways && (
+                  <div className="mb-6">
+                    <h3 className={`text-lg font-semibold mb-3 ${
+                      isDarkMode ? 'text-white' : 'text-gray-900'
+                    }`}>Key Takeaways</h3>
+                    <ul className={`space-y-2 ${
+                      isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      {podcastData.podcast_script.key_takeaways.map((takeaway, index) => (
+                        <li key={index} className="flex items-start space-x-2">
+                          <span className="text-green-500 mt-1">•</span>
+                          <span>{takeaway}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Cross-Document Highlights */}
+                {podcastData.podcast_script?.cross_document_highlights && (
+                  <div className="mb-6">
+                    <h3 className={`text-lg font-semibold mb-3 ${
+                      isDarkMode ? 'text-white' : 'text-gray-900'
+                    }`}>Cross-Document Insights</h3>
+                    <ul className={`space-y-2 ${
+                      isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      {podcastData.podcast_script.cross_document_highlights.map((highlight, index) => (
+                        <li key={index} className="flex items-start space-x-2">
+                          <span className="text-blue-500 mt-1">🔗</span>
+                          <span>{highlight}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Audio Generation Section */}
+                <div className={`p-4 rounded-lg border-2 ${
+                  audioUrl ? 'border-green-500 bg-green-50' : 'border-dashed'
+                } ${
+                  isDarkMode ? (audioUrl ? 'border-green-400 bg-green-900 bg-opacity-20' : 'border-gray-600 bg-gray-800') : (audioUrl ? 'border-green-500 bg-green-50' : 'border-gray-300 bg-gray-50')
+                }`}>
+                  <div className="text-center">
+                    <Headphones className={`w-12 h-12 mx-auto mb-3 ${
+                      audioUrl 
+                        ? (isDarkMode ? 'text-green-400' : 'text-green-600')
+                        : (isDarkMode ? 'text-gray-500' : 'text-gray-400')
+                    }`} />
+                    
+                    {audioUrl ? (
+                      // Audio player section
+                      <div>
+                        <h4 className={`text-lg font-medium mb-2 ${
+                          isDarkMode ? 'text-white' : 'text-gray-900'
+                        }`}>Podcast Audio Ready!</h4>
+                        
+                        <audio 
+                          controls 
+                          className="w-full mb-4"
+                          src={audioUrl}
+                        />
+                        
+                        <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                          <button
+                            onClick={handleDownloadAudio}
+                            className={`px-4 py-2 rounded-lg transition-colors ${
+                              isDarkMode 
+                                ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                                : 'bg-blue-600 hover:bg-blue-700 text-white'
+                            }`}
+                          >
+                            📥 Download Audio
+                          </button>
+                          
+                          <button
+                            onClick={() => {
+                              setAudioBlob(null);
+                              setAudioUrl(null);
+                            }}
+                            className={`px-4 py-2 rounded-lg transition-colors ${
+                              isDarkMode 
+                                ? 'bg-gray-600 hover:bg-gray-700 text-white' 
+                                : 'bg-gray-500 hover:bg-gray-600 text-white'
+                            }`}
+                          >
+                            🗑️ Clear Audio
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      // Audio generation section
+                      <div>
+                        <h4 className={`text-lg font-medium mb-2 ${
+                          isDarkMode ? 'text-white' : 'text-gray-900'
+                        }`}>Generate Podcast Audio</h4>
+                        <p className={`text-sm mb-4 ${
+                          isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>
+                          Convert your podcast script to audio using text-to-speech technology.
+                        </p>
+                        
+                        {availableTTSEngines && (
+                          <div className="mb-4">
+                            <p className={`text-xs mb-2 ${
+                              isDarkMode ? 'text-gray-500' : 'text-gray-500'
+                            }`}>
+                              Available engines: {Object.entries(availableTTSEngines.available_engines)
+                                .filter(([_, available]) => available)
+                                .map(([engine, _]) => engine)
+                                .join(', ')}
+                            </p>
+                          </div>
+                        )}
+                        
+                        <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                          <button
+                            onClick={() => handleGenerateAudio('gtts')}
+                            disabled={isGeneratingAudio || !availableTTSEngines?.available_engines?.gtts}
+                            className={`px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                              isDarkMode 
+                                ? 'bg-green-600 hover:bg-green-700 text-white' 
+                                : 'bg-green-600 hover:bg-green-700 text-white'
+                            }`}
+                          >
+                            {isGeneratingAudio ? '🎵 Generating...' : '🎤 Generate with Google TTS'}
+                          </button>
+                          
+                          <button
+                            onClick={() => handleGenerateAudio('pyttsx3')}
+                            disabled={isGeneratingAudio || !availableTTSEngines?.available_engines?.pyttsx3}
+                            className={`px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                              isDarkMode 
+                                ? 'bg-purple-600 hover:bg-purple-700 text-white' 
+                                : 'bg-purple-600 hover:bg-purple-700 text-white'
+                            }`}
+                          >
+                            {isGeneratingAudio ? '🎵 Generating...' : '🎧 Generate with Local TTS'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </DarkModeContext.Provider>

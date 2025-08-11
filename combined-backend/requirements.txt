@@ -17,6 +17,11 @@ sentence-transformers>=2.2.2
 # AI Insights Generation (Gemini 2.5 Flash)
 google-generativeai>=0.3.0
 
+# Text-to-Speech
+pyttsx3>=2.90
+gtts>=2.3.0
+speechrecognition>=3.10.0
+
 # Environment variables
 python-dotenv>=1.0.0
 

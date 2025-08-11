@@ -1,5 +1,5 @@
 // Backend Service for communicating with FastAPI backend
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8001';
 
 class BackendService {
   // Test connection to backend
@@ -82,14 +82,183 @@ class BackendService {
       }));
       
       console.log('Transformed sections for Smart Connections:', transformedSections);
-      return transformedSections;
+      
+      // Return both recommendations and session_id for cross-document analysis
+      return {
+        recommendations: transformedSections,
+        session_id: result.session_id,
+        metadata: result.metadata
+      };
     } catch (error) {
       console.error('Error getting recommendations:', error);
       throw error;
     }
   }
 
-  // Generate insights
+  // Generate insights from Part 1B data
+  async generateInsightsFromRecommendations(recommendations, persona = 'Researcher', job = 'Generate insights', sessionId = null) {
+    try {
+      // Transform recommendations back to the format expected by insights backend
+      const sections = recommendations.map(rec => ({
+        document: rec.document,
+        section_title: rec.section,
+        page_number: rec.pageNumber || parseInt(rec.page.replace('Page ', '')),
+        content: rec.fullContent,
+        importance_rank: recommendations.indexOf(rec) + 1,
+        coordinates: rec.coordinates
+      }));
+
+      const payload = {
+        extracted_sections: sections,
+        metadata: {
+          persona: job, // Use the job as the persona for more targeted insights
+          job: job,     // Keep job as well for backward compatibility
+          processed_at: new Date().toISOString(),
+          source: "frontend_recommendations",
+          session_id: sessionId  // Include session_id for cross-document analysis
+        }
+      };
+
+      console.log('🔄 Sending payload to insights backend:', payload);
+      console.log('📊 Session ID for cross-document analysis:', sessionId);
+
+      const response = await fetch(`${API_BASE_URL}/insights/generate-from-sections`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Backend error response:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('✅ Insights response:', result);
+      return result;
+    } catch (error) {
+      console.error('Error generating insights from recommendations:', error);
+      throw error;
+    }
+  }
+
+  // Generate podcast from recommendations or current section
+  async generatePodcast(recommendations, persona = 'Researcher', job = 'Generate podcast', sessionId = null) {
+    try {
+      let sections;
+      
+      if (Array.isArray(recommendations)) {
+        // Transform recommendations to sections format
+        sections = recommendations.map(rec => ({
+          document: rec.document,
+          section_title: rec.section,
+          page_number: rec.pageNumber || parseInt(rec.page.replace('Page ', '')),
+          content: rec.fullContent,
+          importance_rank: recommendations.indexOf(rec) + 1,
+          coordinates: rec.coordinates
+        }));
+      } else {
+        // Single section from current document
+        sections = [{
+          document: recommendations.name || 'Current Document',
+          section_title: 'Selected Content',
+          page_number: 1,
+          content: recommendations.content || 'Selected section content',
+          importance_rank: 1
+        }];
+      }
+
+      const payload = {
+        sections: sections,
+        persona: persona,
+        job: job,
+        session_id: sessionId
+      };
+
+      console.log('🎧 Generating podcast with payload:', payload);
+
+      const response = await fetch(`${API_BASE_URL}/insights/podcast-only`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Podcast generation error:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('✅ Podcast generated successfully:', result);
+      
+      return result;
+      
+    } catch (error) {
+      console.error('❌ Error generating podcast:', error);
+      throw error;
+    }
+  }
+
+  // Generate audio from podcast script
+  async generatePodcastAudio(podcastScript, ttsEngine = 'gtts', voiceSettings = null) {
+    try {
+      console.log('🎵 Generating podcast audio...', { ttsEngine });
+      
+      const response = await fetch(`${API_BASE_URL}/insights/generate-audio`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          podcast_script: podcastScript,
+          tts_engine: ttsEngine,
+          voice_settings: voiceSettings
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Audio generation error:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      // Return the audio blob
+      const audioBlob = await response.blob();
+      console.log('✅ Audio generated successfully');
+      
+      return audioBlob;
+      
+    } catch (error) {
+      console.error('❌ Error generating audio:', error);
+      throw error;
+    }
+  }
+
+  // Get available TTS engines
+  async getAvailableTTSEngines() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/insights/tts-engines`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      return result;
+      
+    } catch (error) {
+      console.error('❌ Error fetching TTS engines:', error);
+      throw error;
+    }
+  }
+
+  // Generate insights (legacy file-based method)
   async generateInsights(files, persona = 'Researcher', job = 'Generate insights') {
     const formData = new FormData();
     
@@ -166,12 +335,16 @@ class BackendService {
       // Get recommendations for all files
       if (files.length > 0) {
         try {
-          const recommendations = await this.getRecommendations(
+          const result = await this.getRecommendations(
             files, 
             userProfile.role, 
             userProfile.task
           );
-          results.recommendations = recommendations;
+          
+          // Handle new return format
+          results.recommendations = result.recommendations || result;
+          results.session_id = result.session_id;
+          results.metadata = result.metadata;
         } catch (error) {
           results.errors.push({ 
             file: 'recommendations', 
