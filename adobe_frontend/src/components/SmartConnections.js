@@ -2,9 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { X, ArrowLeft, RefreshCw } from 'lucide-react';
 import { useDarkMode } from '../App';
 import backendService from '../services/backendService';
+import TableOfContents from './TableOfContents';
 
-const SmartConnections = ({ currentDocument, recommendations, isProcessing, onGetRecommendations, activeCollection }) => {
+const SmartConnections = ({ 
+  currentDocument, 
+  recommendations, 
+  isProcessing, 
+  onGetRecommendations, 
+  activeCollection, 
+  onNavigateToSection,
+  pdfStructure,
+  isExtractingStructure,
+  currentSection 
+}) => {
   const [view, setView] = useState('bulb'); // 'bulb', 'connections', 'insights'
+  const [selectedSection, setSelectedSection] = useState(null);
   const { isDarkMode } = useDarkMode();
 
   // Use passed recommendations or empty array
@@ -15,6 +27,36 @@ const SmartConnections = ({ currentDocument, recommendations, isProcessing, onGe
       onGetRecommendations(currentDocument);
     }
     setView('connections');
+  };
+
+  // Determine the context - individual document or collection
+  const isCollectionContext = activeCollection && activeCollection.documents.length > 1;
+  const isIndividualContext = currentDocument && !activeCollection;
+
+  const handleSectionClick = (section) => {
+    setSelectedSection(section);
+    setView('snippet');
+    // Navigate to section in PDF with title for highlighting
+    if (onNavigateToSection && section.page) {
+      const pageNumber = parseInt(section.page.replace('Page ', ''));
+      onNavigateToSection(pageNumber, section.section);
+    }
+  };
+
+  const handleJumpToSection = (section) => {
+    console.log('🔄 SmartConnections: Jump to section clicked:', section);
+    if (onNavigateToSection && section.page) {
+      const pageNumber = parseInt(section.page.replace('Page ', ''));
+      console.log(`🔄 SmartConnections: Parsed page number ${pageNumber} for section "${section.section}"`);
+      // Pass both page number and section title for enhanced navigation
+      onNavigateToSection(pageNumber, section.section);
+    } else {
+      console.warn('⚠️ SmartConnections: No navigation handler or page info missing:', {
+        hasHandler: !!onNavigateToSection,
+        hasPage: !!section.page,
+        section
+      });
+    }
   };
 
   const insights = [
@@ -77,7 +119,7 @@ const SmartConnections = ({ currentDocument, recommendations, isProcessing, onGe
     return colorMap[color] || (isDarkMode ? 'text-gray-300' : 'text-gray-800');
   };
 
-  // Main view - connections button
+  // Main view - always show bulb, outline is now in separate panel
   if (view === 'bulb') {
     return (
       <div className={`w-80 p-4 transition-colors duration-300 ${
@@ -106,7 +148,9 @@ const SmartConnections = ({ currentDocument, recommendations, isProcessing, onGe
             </button>
             <h3 className={`font-medium text-sm mb-2 ${
               isDarkMode ? 'text-white' : 'text-gray-900'
-            }`}>Smart Connections</h3>
+            }`}>
+              {isCollectionContext ? '🔬 Research Analysis' : isIndividualContext ? '📖 Document Analysis' : 'Smart Connections'}
+            </h3>
             <p className={`text-xs leading-relaxed ${
               isDarkMode ? 'text-gray-400' : 'text-gray-500'
             }`}>
@@ -114,10 +158,12 @@ const SmartConnections = ({ currentDocument, recommendations, isProcessing, onGe
                 ? 'Create a collection or select a document to discover relevant sections' 
                 : isProcessing
                   ? activeCollection
-                    ? `Analyzing ${activeCollection.documents.length} documents in collection...`
+                    ? `Analyzing ${activeCollection.documents.length} documents for cross-document insights...`
                     : 'Analyzing document sections...'
-                  : activeCollection
-                    ? `Click to analyze ${activeCollection.documents.length} documents in "${activeCollection.name}"`
+                  : isCollectionContext
+                    ? `Click to analyze ${activeCollection.documents.length} documents for comparative insights and cross-references`
+                    : isIndividualContext
+                    ? `Click to analyze "${currentDocument.name}" and find key relevant sections`
                     : 'Click to discover relevant sections using AI analysis'
               }
             </p>
@@ -125,7 +171,10 @@ const SmartConnections = ({ currentDocument, recommendations, isProcessing, onGe
               <div className={`mt-3 text-xs px-2 py-1 rounded ${
                 isDarkMode ? 'bg-green-800 text-green-200' : 'bg-green-100 text-green-800'
               }`}>
-                {relatedSections.length} relevant sections found
+                {isCollectionContext 
+                  ? `${relatedSections.length} cross-document insights found`
+                  : `${relatedSections.length} relevant sections found`
+                }
               </div>
             )}
           </div>
@@ -199,7 +248,7 @@ const SmartConnections = ({ currentDocument, recommendations, isProcessing, onGe
             relatedSections.slice(0, 3).map((section, index) => (
               <div 
                 key={section.id}
-                className={`related-item border rounded-lg p-3 cursor-pointer transition-colors ${getColorClasses(section.color)}`}
+                className={`related-item border rounded-lg p-3 transition-colors ${getColorClasses(section.color)}`}
               >
                 <div className="flex items-start justify-between mb-2">
                   <h4 className="font-medium text-sm truncate">{section.document}</h4>
@@ -230,20 +279,27 @@ const SmartConnections = ({ currentDocument, recommendations, isProcessing, onGe
                   </span>
                 </div>
                 <h5 className="font-medium text-sm mb-1">{section.section}</h5>
-                <p className="text-xs leading-relaxed mb-2 line-clamp-3">{section.description}</p>
-                <div className="flex items-center justify-between">
-                  <span className={`text-xs ${
-                    isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                  }`}>
-                    From Part 1B Analysis
-                  </span>
+                <p className="text-xs leading-relaxed mb-3 line-clamp-3">{section.description}</p>
+                <div className="flex items-center justify-between space-x-2">
                   <button 
-                    onClick={() => setView('insights')}
-                    className={`text-xs underline ${
-                      isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-800'
+                    onClick={() => handleSectionClick(section)}
+                    className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                      isDarkMode 
+                        ? 'border-blue-600 text-blue-400 hover:bg-blue-600 hover:text-white' 
+                        : 'border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white'
                     }`}
                   >
-                    View Details
+                    View Snippet
+                  </button>
+                  <button 
+                    onClick={() => handleJumpToSection(section)}
+                    className={`text-xs px-3 py-1 rounded-full transition-colors ${
+                      isDarkMode 
+                        ? 'bg-green-600 text-white hover:bg-green-700' 
+                        : 'bg-green-600 text-white hover:bg-green-700'
+                    }`}
+                  >
+                    Jump to Section
                   </button>
                 </div>
               </div>
@@ -269,14 +325,129 @@ const SmartConnections = ({ currentDocument, recommendations, isProcessing, onGe
     );
   }
 
-  // Insights view
-  if (view === 'insights') {
+  // Snippet view - showing detailed section information
+  if (view === 'snippet' && selectedSection) {
     return (
-      <div className={`w-1/5 flex flex-col transition-colors duration-300 ${
+      <div className={`w-80 flex flex-col transition-colors duration-300 ${
         isDarkMode 
           ? 'bg-gray-800 border-l border-gray-700' 
           : 'bg-white border-l border-gray-200'
-      }`}>
+      } flex-shrink-0`}>
+        <div className={`p-4 border-b transition-colors duration-300 ${
+          isDarkMode ? 'border-gray-700' : 'border-gray-200'
+        }`}>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className={`font-semibold ${
+              isDarkMode ? 'text-white' : 'text-gray-900'
+            }`}>Section Snippet</h3>
+            <button 
+              onClick={() => setView('connections')}
+              className={`transition-colors ${
+                isDarkMode 
+                  ? 'text-gray-400 hover:text-gray-300' 
+                  : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="flex items-center space-x-2">
+            <span className={`text-xs px-2 py-1 rounded ${
+              isDarkMode ? 'bg-blue-800 text-blue-200' : 'bg-blue-100 text-blue-800'
+            }`}>
+              {selectedSection.document}
+            </span>
+            <span className={`text-xs px-2 py-1 rounded ${
+              isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'
+            }`}>
+              {selectedSection.page}
+            </span>
+          </div>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="mb-4">
+            <h4 className={`font-medium text-sm mb-2 ${
+              isDarkMode ? 'text-white' : 'text-gray-900'
+            }`}>
+              {selectedSection.section}
+            </h4>
+            <div className={`text-xs px-2 py-1 rounded mb-2 inline-block ${
+              selectedSection.relevance >= 80 
+                ? isDarkMode ? 'bg-green-800 text-green-200' : 'bg-green-100 text-green-800'
+                : isDarkMode ? 'bg-yellow-800 text-yellow-200' : 'bg-yellow-100 text-yellow-800'
+            }`}>
+              {selectedSection.relevance}% relevance match
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <h5 className={`font-medium text-xs mb-2 ${
+                isDarkMode ? 'text-gray-300' : 'text-gray-700'
+              }`}>CONCEPT DESCRIPTION</h5>
+              <p className={`text-sm leading-relaxed ${
+                isDarkMode ? 'text-gray-200' : 'text-gray-800'
+              }`}>
+                {selectedSection.description}
+              </p>
+            </div>
+
+            {selectedSection.keyPoints && (
+              <div>
+                <h5 className={`font-medium text-xs mb-2 ${
+                  isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                }`}>KEY POINTS</h5>
+                <ul className="space-y-1">
+                  {selectedSection.keyPoints.map((point, index) => (
+                    <li key={index} className={`text-sm flex items-start ${
+                      isDarkMode ? 'text-gray-200' : 'text-gray-800'
+                    }`}>
+                      <span className="w-1 h-1 bg-blue-500 rounded-full mt-2 mr-2 flex-shrink-0"></span>
+                      {point}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <button 
+                onClick={() => handleJumpToSection(selectedSection)}
+                className={`w-full text-sm py-2 px-3 rounded transition-colors ${
+                  isDarkMode 
+                    ? 'bg-green-600 hover:bg-green-700 text-white' 
+                    : 'bg-green-600 hover:bg-green-700 text-white'
+                }`}
+              >
+                🎯 Jump to This Section
+              </button>
+              
+              <button 
+                onClick={() => setView('connections')}
+                className={`w-full text-sm py-2 px-3 rounded border transition-colors ${
+                  isDarkMode 
+                    ? 'border-gray-600 text-gray-300 hover:bg-gray-700' 
+                    : 'border-gray-300 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                ← Back to All Sections
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Insights view
+  if (view === 'insights') {
+    return (
+      <div className={`w-80 flex flex-col transition-colors duration-300 ${
+        isDarkMode 
+          ? 'bg-gray-800 border-l border-gray-700' 
+          : 'bg-white border-l border-gray-200'
+      } flex-shrink-0`}>
         <div className={`p-4 border-b transition-colors duration-300 ${
           isDarkMode ? 'border-gray-700' : 'border-gray-200'
         }`}>

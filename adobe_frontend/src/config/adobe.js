@@ -13,16 +13,21 @@ export const ADOBE_CONFIG = {
     showDownloadPDF: false,
     showPrintPDF: false,
     showLeftHandPanel: true,
-    showAnnotationTools: false,
+    showAnnotationTools: true, // Enable annotations for highlighting
     enableFormFilling: false,
     showBookmarks: true,
     showThumbnails: true,
-    showSearch: true,
+    showSearch: true, // Enable search for section navigation
     showZoomControls: true,
-    showPageControls: true,
+    showPageControls: true, // Enable page controls for navigation
     showFullScreen: true,
-    showSecondaryToolbar: false,
-    showToolbarControl: true
+    showSecondaryToolbar: true, // Enable secondary toolbar for more options
+    showToolbarControl: true,
+    enableLinearization: false,
+    enableAnnotationsAPI: true, // Enable annotations API
+    enableSearchAPI: true, // Enable search API
+    includeAnnotations: true,
+    pageMode: "THUMBNAILS_AND_BOOKMARKS" // Show both thumbnails and bookmarks by default
   }
 };
 

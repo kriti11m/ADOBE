@@ -1,8 +1,8 @@
 import React from 'react';
-import { Settings, Moon, Sun } from 'lucide-react';
+import { Settings, Moon, Sun, History } from 'lucide-react';
 import { useDarkMode } from '../App';
 
-const Navigation = ({ userProfile, isProcessing }) => {
+const Navigation = ({ userProfile, isProcessing, onOpenHistory }) => {
   const { isDarkMode, toggleDarkMode } = useDarkMode();
 
   return (
@@ -33,7 +33,7 @@ const Navigation = ({ userProfile, isProcessing }) => {
           )}
           
           {/* Offline Mode Badge */}
-          <div className={`hidden flex items-center space-x-2 px-3 py-1 rounded-full ${
+          <div className={`hidden items-center space-x-2 px-3 py-1 rounded-full ${
             isDarkMode 
               ? 'bg-gray-700 text-gray-300' 
               : 'bg-gray-100 text-gray-600'
@@ -61,6 +61,19 @@ const Navigation = ({ userProfile, isProcessing }) => {
               </div>
             </div>
           )}
+          
+          {/* History Button */}
+          <button 
+            onClick={onOpenHistory}
+            className={`p-2 rounded-lg transition-colors ${
+              isDarkMode 
+                ? 'text-purple-400 hover:text-purple-300 hover:bg-gray-700' 
+                : 'text-purple-600 hover:text-purple-900 hover:bg-gray-100'
+            }`}
+            title="View Analysis History"
+          >
+            <History className="w-6 h-6" />
+          </button>
           
           {/* Dark Mode Toggle */}
           <button 

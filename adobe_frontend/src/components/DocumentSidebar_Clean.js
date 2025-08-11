@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileText, FolderPlus, Folder, ChevronDown, ChevronRight } from 'lucide-react';
+import { Upload, FileText, FolderPlus, Folder, Users, ChevronDown, ChevronRight } from 'lucide-react';
 import { useDarkMode } from '../App';
 
 const DocumentSidebar = ({ 
@@ -11,8 +11,7 @@ const DocumentSidebar = ({
   collections = [],
   activeCollection,
   onSelectCollection,
-  onShowCollectionUploader,
-  onCollectionDocumentSelect
+  onShowCollectionUploader
 }) => {
   const [activeTab, setActiveTab] = useState('collections');
   const [activeFilter, setActiveFilter] = useState('all');
@@ -20,13 +19,6 @@ const DocumentSidebar = ({
   const [expandedCollections, setExpandedCollections] = useState(new Set());
   const fileInputRef = useRef(null);
   const { isDarkMode } = useDarkMode();
-
-  // Auto-expand active collection when it changes
-  React.useEffect(() => {
-    if (activeCollection && !expandedCollections.has(activeCollection.id)) {
-      setExpandedCollections(prev => new Set(prev).add(activeCollection.id));
-    }
-  }, [activeCollection, expandedCollections]);
 
   const handleFileSelect = (event) => {
     const files = event.target.files;
@@ -72,11 +64,7 @@ const DocumentSidebar = ({
       ...document,
       fromCollection: collection
     };
-    if (onCollectionDocumentSelect) {
-      onCollectionDocumentSelect(documentWithCollection, collection);
-    } else {
-      onDocumentSelect(documentWithCollection);
-    }
+    onDocumentSelect(documentWithCollection);
   };
 
   const getFilteredDocuments = () => {
@@ -217,6 +205,22 @@ const DocumentSidebar = ({
               <FolderPlus className="w-5 h-5 inline mr-2" />
               Create New Collection
             </button>
+
+            {activeCollection && (
+              <div className={`mb-4 p-3 rounded-lg border ${
+                isDarkMode 
+                  ? 'bg-blue-900/20 border-blue-700 text-blue-300' 
+                  : 'bg-blue-50 border-blue-200 text-blue-800'
+              }`}>
+                <div className="flex items-center">
+                  <Users className="w-4 h-4 mr-2" />
+                  <span className="text-sm font-medium">Active: {activeCollection.name}</span>
+                </div>
+                <p className="text-xs mt-1 opacity-75">
+                  {activeCollection.documents.length} documents • Smart Connections will analyze all
+                </p>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -317,26 +321,26 @@ const DocumentSidebar = ({
                       onClick={() => onSelectCollection(collection)}
                     >
                       <Folder className="w-4 h-4 mr-2 flex-shrink-0" />
-                      <div>
-                        <span className="font-medium text-sm">{collection.name}</span>
-                        <p className="text-xs opacity-75 mt-1">
-                          {collection.documents.length} documents
-                        </p>
-                      </div>
+                      <span className="text-sm font-medium truncate">{collection.name}</span>
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleCollectionExpansion(collection.id);
-                      }}
-                      className="p-1 hover:bg-black hover:bg-opacity-10 rounded"
-                    >
-                      {expandedCollections.has(collection.id) ? (
-                        <ChevronDown className="w-4 h-4" />
-                      ) : (
-                        <ChevronRight className="w-4 h-4" />
-                      )}
-                    </button>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs opacity-75">
+                        {collection.documents.length} docs
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleCollectionExpansion(collection.id);
+                        }}
+                        className="p-1 hover:bg-black hover:bg-opacity-10 rounded"
+                      >
+                        {expandedCollections.has(collection.id) ? (
+                          <ChevronDown className="w-4 h-4" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Collection Documents (when expanded) */}

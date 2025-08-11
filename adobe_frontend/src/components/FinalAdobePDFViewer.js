@@ -1,165 +1,264 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { ADOBE_CONFIG } from '../config/adobe';
-import { useDarkMode } from '../App';
 
-const FinalAdobePDFViewer = ({ selectedDocument }) => {
-  const viewerRef = useRef(null);
-  const [isLoading, setIsLoading] = useState(false);
+const FinalAdobePDFViewer = forwardRef(({ 
+  selectedDocument, 
+  onSectionHighlight,
+  className = ""
+}, ref) => {
+  // State management
+  const [isLoading, setIsLoading] = useState(false); // Start as false, only load when document selected
   const [error, setError] = useState(null);
+  const [adobeAPIs, setAdobeAPIs] = useState(null);
   const [viewerReady, setViewerReady] = useState(false);
-  const { isDarkMode } = useDarkMode();
+  
+  // Refs
+  const viewerRef = useRef(null);
+  const viewerInstanceRef = useRef(null);
 
-  useEffect(() => {
-    if (selectedDocument && selectedDocument.file) {
-      loadPDF();
+  // Expose navigation methods to parent components
+  useImperativeHandle(ref, () => ({
+    navigateToSection: (pageNumber, sectionTitle = null) => navigateToSection(pageNumber, sectionTitle),
+    navigateToSectionByTitle: (sectionTitle) => navigateToSectionByTitle(sectionTitle),
+  }));
+
+  // Enhanced navigation using proper Adobe PDF Embed API structure
+  const navigateToSection = async (pageNumber, sectionTitle = null) => {
+    console.log(`🎯 Attempting to navigate to page ${pageNumber}${sectionTitle ? ` (section: "${sectionTitle}")` : ''}`);
+
+    if (!adobeAPIs) {
+      console.warn('ℹ️ Adobe APIs not ready yet');
+      return;
     }
-  }, [selectedDocument]);
 
-  const loadPDF = async () => {
-    setIsLoading(true);
-    setError(null);
-    setViewerReady(false);
+    // Parse page number properly
+    let targetPage = pageNumber;
+    if (typeof pageNumber === 'string' && pageNumber.includes('Page ')) {
+      targetPage = parseInt(pageNumber.replace('Page ', ''));
+    } else if (typeof pageNumber === 'string') {
+      targetPage = parseInt(pageNumber);
+    }
+
+    if (isNaN(targetPage) || targetPage < 1) {
+      console.warn('⚠️ Invalid page number:', pageNumber);
+      return;
+    }
 
     try {
-      // Check Adobe SDK availability
-      if (!window.AdobeDC?.View) {
-        throw new Error('Adobe PDF SDK not loaded');
-      }
+      console.log(`🎯 Navigating to page ${targetPage} for section: "${sectionTitle}"`);
+      await adobeAPIs.gotoLocation({ pageNumber: targetPage });
+      console.log(`✅ Successfully navigated to page ${targetPage}`);
 
-      // Check configuration
-      if (!ADOBE_CONFIG?.CLIENT_ID) {
-        throw new Error('Adobe Client ID not configured');
-      }
+      if (onSectionHighlight) onSectionHighlight(targetPage);
+    } catch (error) {
+      console.error('❌ Navigation failed:', error);
+    }
+  };
 
-      // Wait for React to render the component
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Check if the ref is available
-      if (!viewerRef.current) {
-        throw new Error('PDF viewer container not ready');
+  const navigateToSectionByTitle = async (sectionTitle) => {
+    if (!adobeAPIs || !sectionTitle) {
+      console.error('❌ Adobe APIs not ready or no section title provided');
+      return;
+    }
+    
+    try {
+      console.log(`🔍 Searching for section: "${sectionTitle}"`);
+      
+      // Use Adobe PDF APIs for search
+      if (adobeAPIs.search) {
+        console.log(`🔍 Using Adobe API search for: "${sectionTitle}"`);
+        const searchResult = await adobeAPIs.search(sectionTitle);
+        console.log('🎯 Search result:', searchResult);
+        return;
       }
       
-      // Clear any existing content
-      viewerRef.current.innerHTML = '';
+      console.log('⚠️ Adobe API search not available, using fallback DOM search');
       
-      // Convert file to array buffer
-      const arrayBuffer = await selectedDocument.file.arrayBuffer();
+      // Fallback to DOM-based search
+      const searchBtn = document.querySelector('[data-tool="search"], button[title*="Search"]');
+      if (searchBtn) {
+        searchBtn.click();
+        
+        setTimeout(() => {
+          const searchInput = document.querySelector('input[placeholder*="search" i]');
+          if (searchInput) {
+            searchInput.value = sectionTitle;
+            searchInput.focus();
+            searchInput.dispatchEvent(new KeyboardEvent('keydown', {
+              key: 'Enter',
+              keyCode: 13,
+              bubbles: true
+            }));
+          }
+        }, 300);
+      }
+      
+    } catch (error) {
+      console.error('❌ Section search failed:', error);
+    }
+  };
 
-      // Create a unique ID for this instance
-      const uniqueId = `adobe-pdf-viewer-${Date.now()}`;
-      viewerRef.current.id = uniqueId;
+  // Initialize Adobe PDF viewer
+  const initializeAdobePDF = async () => {
+    if (!selectedDocument) {
+      console.log('📄 No document selected for Adobe PDF viewer');
+      return;
+    }
 
-      // Initialize Adobe DC View
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      console.log('🚀 Initializing Adobe PDF Embed API...');
+
+      // Ensure Adobe DC SDK is loaded
+      if (typeof window.AdobeDC === 'undefined') {
+        console.error('❌ Adobe DC SDK not loaded');
+        setError('Adobe PDF SDK not loaded. Please check your internet connection.');
+        setIsLoading(false);
+        return;
+      }
+
+      // Clean up previous viewer instance
+      if (viewerInstanceRef.current) {
+        try {
+          await viewerInstanceRef.current.destroy?.();
+        } catch (destroyError) {
+          console.warn('⚠️ Error destroying previous viewer:', destroyError);
+        }
+      }
+
+      // Clear the viewer container
+      if (viewerRef.current) {
+        viewerRef.current.innerHTML = '';
+      }
+
+      console.log('🔧 Creating new Adobe DC View instance...');
       const adobeDCView = new window.AdobeDC.View({
         clientId: ADOBE_CONFIG.CLIENT_ID,
-        divId: uniqueId
+        divId: "adobe-dc-view"
       });
 
-      // Prepare file data
-      const filePromise = Promise.resolve(arrayBuffer);
-      
-      // Load the PDF
-      await adobeDCView.previewFile({
-        content: { promise: filePromise },
-        metaData: { 
-          fileName: selectedDocument.name || selectedDocument.file.name || 'document.pdf'
-        }
-      }, ADOBE_CONFIG.VIEWER_CONFIG);
+      // Build content descriptor: support either backend URL (file_path) or local File object
+      let contentDescriptor = null;
+      let metaFileName = selectedDocument.name || selectedDocument.file?.name || 'document.pdf';
+      if (selectedDocument.file && selectedDocument.file.arrayBuffer) {
+        const arrayBuffer = await selectedDocument.file.arrayBuffer();
+        contentDescriptor = { content: { promise: Promise.resolve(arrayBuffer) }, metaData: { fileName: metaFileName } };
+      } else if (selectedDocument.file_path) {
+        console.log('📄 Loading PDF file by URL:', selectedDocument.file_path);
+        contentDescriptor = { content: { location: { url: `http://localhost:8000/files/${selectedDocument.file_path}` } }, metaData: { fileName: metaFileName } };
+      } else {
+        throw new Error('Selected document has neither file nor file_path');
+      }
 
+      // Preview the PDF file and get viewer instance
+      const viewer = await adobeDCView.previewFile(
+        contentDescriptor,
+        {
+        ...ADOBE_CONFIG.VIEWER_CONFIG,
+        // Enhanced viewer options for navigation
+        showPageControls: true,
+        showBookmarks: true,
+        showThumbnails: true,
+        showSearch: true,
+        enableFormFilling: false,
+        showAnnotationTools: true
+      }
+      );
+
+      console.log('🔗 Getting PDF APIs from viewer...');
+      
+      // Get the APIs from the viewer instance
+      const apis = await viewer.getAPIs();
+      
+      console.log('✅ Adobe PDF viewer fully loaded and ready');
+      console.log('🎯 Available navigation methods:', Object.keys(apis));
+
+      // Store the APIs for navigation
+      viewerInstanceRef.current = viewer;
+      setAdobeAPIs(apis);
       setViewerReady(true);
       setIsLoading(false);
 
     } catch (error) {
-      console.error('Error loading PDF:', error);
-      setError(error.message);
+      console.error('❌ Failed to initialize Adobe PDF viewer:', error);
+      setError('Failed to load PDF viewer. Please try again.');
       setIsLoading(false);
     }
   };
 
+  // (Removed document auto-loading helpers to revert to original simple approach)
+
+  // Initialize when document changes
+  useEffect(() => {
+    if (selectedDocument) {
+      initializeAdobePDF();
+    }
+    return () => {
+      if (viewerInstanceRef.current && typeof viewerInstanceRef.current.destroy === 'function') {
+        viewerInstanceRef.current.destroy().catch(console.warn);
+      }
+    };
+  }, [selectedDocument]);
+
+  // Show placeholder when no document is selected
   if (!selectedDocument) {
     return (
-      <div className={`flex items-center justify-center w-full h-full min-h-[500px] ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} border-r ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-        <div className="text-center px-8 py-12 max-w-md mx-auto">
-          <div className={`w-20 h-20 mx-auto mb-6 rounded-full ${isDarkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg flex items-center justify-center`}>
-            <svg className={`w-10 h-10 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
+      <div className={`flex items-center justify-center h-full ${className}`}>
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-4 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+            <span className="text-2xl text-gray-400 dark:text-gray-500">📄</span>
           </div>
-          <h3 className={`text-xl font-semibold mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-            No Document Selected
-          </h3>
-          <p className={`text-base mb-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-            Choose a document from the sidebar to start viewing
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No Document Selected</h3>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+            Select a PDF from your documents or collections to view it here
           </p>
-          <div className={`text-sm ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-            <p>• Upload individual documents or create collections</p>
-            <p>• Use Smart Connections for AI-powered insights</p>
-            <p>• Get personalized recommendations based on your role</p>
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            • Choose from individual documents<br/>
+            • Or select from a collection<br/>
+            • Use Smart Connections to analyze content
           </div>
         </div>
       </div>
     );
   }
 
+  // Always render the container to ensure the divId exists when document is selected
   return (
-    <div className={`w-full h-full relative ${isDarkMode ? 'bg-gray-900' : 'bg-white'} border-r ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-      {isLoading && (
-        <div className={`absolute inset-0 flex items-center justify-center z-10 ${isDarkMode ? 'bg-gray-900 bg-opacity-90' : 'bg-white bg-opacity-90'}`}>
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4 mx-auto"></div>
-            <p className={`${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Loading PDF...</p>
-          </div>
-        </div>
-      )}
-      
-      {error && (
-        <div className={`absolute inset-0 flex items-center justify-center z-10 ${isDarkMode ? 'bg-red-900 bg-opacity-90' : 'bg-red-50'}`}>
-          <div className="text-center p-6 rounded-lg max-w-md">
-            <div className={`w-16 h-16 mx-auto mb-4 rounded-full ${isDarkMode ? 'bg-red-800' : 'bg-red-100'} flex items-center justify-center`}>
-              <svg className={`w-8 h-8 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-              </svg>
-            </div>
-            <h3 className={`font-semibold text-lg mb-2 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
-              Failed to load PDF
-            </h3>
-            <p className={`text-sm mb-4 ${isDarkMode ? 'text-red-300' : 'text-red-600'}`}>
-              {error}
-            </p>
-            <button 
-              onClick={loadPDF}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                isDarkMode 
-                  ? 'bg-red-600 hover:bg-red-700 text-white' 
-                  : 'bg-red-600 hover:bg-red-700 text-white'
-              }`}
-            >
-              Try Again
-            </button>
-          </div>
-        </div>
-      )}
-
+    <div className={`relative h-full w-full ${className}`}>
       <div 
+        id="adobe-dc-view" 
         ref={viewerRef}
-        className="w-full h-full"
+        className="h-full w-full"
         style={{ minHeight: '600px' }}
       />
-      
-      {viewerReady && (
-        <div className={`absolute top-4 right-4 px-3 py-1 rounded-full text-xs font-medium ${
-          isDarkMode 
-            ? 'bg-green-800 text-green-200 border border-green-600' 
-            : 'bg-green-100 text-green-800 border border-green-300'
-        }`}>
-          <div className="flex items-center space-x-1">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <span>PDF Ready</span>
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80 dark:bg-gray-800/80">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-gray-600 dark:text-gray-300">Loading PDF viewer...</p>
+          </div>
+        </div>
+      )}
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-red-50/80 dark:bg-red-900/80">
+          <div className="text-center">
+            <div className="text-red-500 dark:text-red-400 text-2xl mb-4">⚠️</div>
+            <p className="text-red-700 dark:text-red-300">{error}</p>
+            <button 
+              onClick={initializeAdobePDF}
+              className="mt-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700"
+            >
+              Retry
+            </button>
           </div>
         </div>
       )}
     </div>
   );
-};
+});
+
+FinalAdobePDFViewer.displayName = 'FinalAdobePDFViewer';
 
 export default FinalAdobePDFViewer;
