@@ -1,8 +1,8 @@
 import React from 'react';
-import { Settings, Moon, Sun, History, HelpCircle } from 'lucide-react';
+import { Settings, Moon, Sun, HelpCircle } from 'lucide-react';
 import { useDarkMode } from '../App';
 
-const Navigation = ({ userProfile, isProcessing, onOpenHistory, onRestartTutorial }) => {
+const Navigation = ({ userProfile, isProcessing, onRestartTutorial }) => {
   const { isDarkMode, toggleDarkMode } = useDarkMode();
 
   return (
@@ -73,20 +73,6 @@ const Navigation = ({ userProfile, isProcessing, onOpenHistory, onRestartTutoria
             title="Restart Tutorial"
           >
             <HelpCircle className="w-6 h-6" />
-          </button>
-
-          {/* History Button */}
-          <button 
-            id="history-button"
-            onClick={onOpenHistory}
-            className={`p-2 rounded-lg transition-colors ${
-              isDarkMode 
-                ? 'text-purple-400 hover:text-purple-300 hover:bg-gray-700' 
-                : 'text-purple-600 hover:text-purple-900 hover:bg-gray-100'
-            }`}
-            title="View Analysis History"
-          >
-            <History className="w-6 h-6" />
           </button>
           
           {/* Dark Mode Toggle */}

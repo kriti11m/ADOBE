@@ -1,6 +1,7 @@
-import React, { useState, useRef } from 'react';
-import { Upload, FileText, FolderPlus, Folder, ChevronDown, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { FileText, FolderPlus, Folder, ChevronDown, ChevronRight, History, Calendar } from 'lucide-react';
 import { useDarkMode } from '../App';
+import historyService from '../services/historyService';
 
 const DocumentSidebar = ({ 
   documents, 
@@ -12,13 +13,14 @@ const DocumentSidebar = ({
   activeCollection,
   onSelectCollection,
   onShowCollectionUploader,
-  onCollectionDocumentSelect
+  onCollectionDocumentSelect,
+  onLoadSession // Add this new prop for loading sessions
 }) => {
   const [activeTab, setActiveTab] = useState('collections');
-  const [activeFilter, setActiveFilter] = useState('all');
-  const [isDragOver, setIsDragOver] = useState(false);
   const [expandedCollections, setExpandedCollections] = useState(new Set());
-  const fileInputRef = useRef(null);
+  const [expandedHistoryItems, setExpandedHistoryItems] = useState(new Set());
+  const [historyData, setHistoryData] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const { isDarkMode } = useDarkMode();
 
   // Auto-expand active collection when it changes
@@ -28,33 +30,50 @@ const DocumentSidebar = ({
     }
   }, [activeCollection, expandedCollections]);
 
-  const handleFileSelect = (event) => {
-    const files = event.target.files;
-    if (files.length > 0) {
-      onFileUpload(files);
+  // Load history when history tab is selected
+  useEffect(() => {
+    if (activeTab === 'history') {
+      loadHistory();
+    }
+  }, [activeTab]);
+
+  const loadHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const response = await historyService.getHistory(50, 0);
+      setHistoryData(response.history || []);
+    } catch (error) {
+      console.error('Error loading history:', error);
+      setHistoryData([]);
+    } finally {
+      setLoadingHistory(false);
     }
   };
 
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragOver(true);
+  const toggleHistoryExpansion = (sessionId) => {
+    const newExpanded = new Set(expandedHistoryItems);
+    if (newExpanded.has(sessionId)) {
+      newExpanded.delete(sessionId);
+    } else {
+      newExpanded.add(sessionId);
+    }
+    setExpandedHistoryItems(newExpanded);
   };
 
-  const handleDragLeave = () => {
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      onFileUpload(files);
+  const handleLoadHistorySession = (session) => {
+    if (onLoadSession) {
+      onLoadSession(session);
     }
   };
 
-  const handleUploadClick = () => {
-    fileInputRef.current.click();
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   const toggleCollectionExpansion = (collectionId) => {
@@ -77,11 +96,6 @@ const DocumentSidebar = ({
     } else {
       onDocumentSelect(documentWithCollection);
     }
-  };
-
-  const getFilteredDocuments = () => {
-    if (activeFilter === 'all') return documents;
-    return documents.filter(doc => doc.status === activeFilter);
   };
 
   const getTagColor = (tag) => {
@@ -110,17 +124,19 @@ const DocumentSidebar = ({
           isDarkMode ? 'bg-gray-700' : 'bg-gray-100'
         }`}>
           <button
-            onClick={() => setActiveTab('documents')}
+            id="history-tab"
+            onClick={() => setActiveTab('history')}
             className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'documents'
+              activeTab === 'history'
                 ? isDarkMode ? 'bg-blue-600 text-white' : 'bg-white text-gray-900 shadow-sm'
                 : isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-600 hover:text-gray-900'
             }`}
           >
-            <FileText className="w-4 h-4 inline mr-2" />
-            Documents
+            <History className="w-4 h-4 inline mr-2" />
+            History
           </button>
           <button
+            id="collections-tab"
             onClick={() => setActiveTab('collections')}
             className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
               activeTab === 'collections'
@@ -133,66 +149,22 @@ const DocumentSidebar = ({
           </button>
         </div>
 
-        {activeTab === 'documents' ? (
-          // Documents Tab Content
+        {activeTab === 'history' ? (
+          // History Tab Content
           <>
             <div className="flex items-center justify-between mb-4">
               <h2 className={`text-lg font-semibold flex items-center ${
                 isDarkMode ? 'text-white' : 'text-gray-900'
               }`}>
-                <span className="mr-2">📚</span>
-                Your Documents
+                <span className="mr-2">�</span>
+                Analysis History
               </h2>
             </div>
             
-            {/* Upload Area */}
-            <div 
-              className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer mb-2 ${
-                isDragOver 
-                  ? isDarkMode 
-                    ? 'border-blue-400 bg-blue-900/20' 
-                    : 'border-blue-400 bg-blue-50'
-                  : isDarkMode
-                    ? 'border-gray-600 hover:border-blue-400'
-                    : 'border-gray-300 hover:border-blue-400'
-              }`}
-              onClick={handleUploadClick}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept=".pdf"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-              <div className={`text-2xl mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                📄
-              </div>
-              <p className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                Drop PDFs here or click to upload
-              </p>
-              <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                Supports PDF files
-              </p>
-            </div>
-
-            {/* Bulk Upload Button */}
-            <div id="upload-buttons">
-              <button
-                onClick={onShowUploader}
-                className={`w-full py-2 px-4 rounded-lg text-sm font-medium transition-colors mb-4 ${
-                  isDarkMode 
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                    : 'bg-blue-100 hover:bg-blue-200 text-blue-600'
-                }`}
-              >
-                <Upload className="w-4 h-4 inline mr-2" />
-                Bulk Upload & Process
-              </button>
+            <div className={`text-sm ${
+              isDarkMode ? 'text-gray-400' : 'text-gray-600'
+            }`}>
+              View your previous analysis sessions and collections
             </div>
           </>
         ) : (
@@ -209,6 +181,7 @@ const DocumentSidebar = ({
             
             {/* Create Collection Button */}
             <button
+              id="upload-documents"
               onClick={onShowCollectionUploader}
               className={`w-full py-3 px-4 rounded-lg text-sm font-medium transition-colors mb-4 border-2 border-dashed ${
                 isDarkMode 
@@ -224,77 +197,137 @@ const DocumentSidebar = ({
       </div>
         
       {/* Content based on active tab */}
-      {activeTab === 'documents' ? (
-        // Documents Tab Content
+      {activeTab === 'history' ? (
+        // History Tab Content
         <>
-          {/* Quick Filters */}
-          <div className="p-4 pt-0">
-            <div className="flex gap-1 mb-4">
-              {['all', 'new', 'recent', 'analyzed'].map(filter => (
-                <button
-                  key={filter}
-                  onClick={() => setActiveFilter(filter)}
-                  className={`px-2 py-1 text-xs rounded transition-colors ${
-                    activeFilter === filter
-                      ? isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-800'
-                      : isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-600 hover:text-gray-800'
-                  }`}
-                >
-                  {filter.charAt(0).toUpperCase() + filter.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Documents List */}
-          <div className="flex-1 overflow-y-auto px-4 pb-4">
-            <div className="space-y-2">
-              {getFilteredDocuments().map(document => (
-                <div
-                  key={document.id}
-                  onClick={() => onDocumentSelect(document)}
-                  className={`p-3 rounded-lg cursor-pointer transition-colors border ${
-                    currentDocument?.id === document.id
-                      ? isDarkMode 
-                        ? 'bg-blue-600 text-white border-blue-500' 
-                        : 'bg-blue-100 text-blue-900 border-blue-300'
-                      : isDarkMode 
-                        ? 'hover:bg-gray-700 text-gray-300 border-gray-600 hover:border-gray-500' 
-                        : 'hover:bg-gray-50 text-gray-700 border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center space-x-2">
-                      <FileText className="w-4 h-4 flex-shrink-0" />
-                      <span className="text-sm font-medium truncate">{document.name}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs opacity-75">{document.timestamp}</span>
-                    <div className="flex space-x-1">
-                      {document.tags?.map((tag, index) => (
-                        <span 
-                          key={index}
-                          className={`px-2 py-1 text-xs rounded-full ${getTagColor(tag)}`}
+          <div className="flex-1 overflow-y-auto p-4">
+            {loadingHistory ? (
+              <div className={`text-center py-8 ${
+                isDarkMode ? 'text-gray-400' : 'text-gray-500'
+              }`}>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                <p className="text-sm">Loading history...</p>
+              </div>
+            ) : historyData.length === 0 ? (
+              <div className={`text-center py-8 ${
+                isDarkMode ? 'text-gray-400' : 'text-gray-500'
+              }`}>
+                <History className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p className="text-sm">No analysis history found</p>
+                <p className="text-xs">Start analyzing documents to build your history</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {historyData.map((session) => (
+                  <div key={session.id} className={`border rounded-lg overflow-hidden ${
+                    isDarkMode ? 'border-gray-600' : 'border-gray-200'
+                  }`}>
+                    {/* Session Header */}
+                    <div
+                      className={`p-3 cursor-pointer transition-colors flex items-center justify-between ${
+                        isDarkMode ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      <div className="flex items-center flex-1">
+                        <History className="w-4 h-4 mr-2 flex-shrink-0" />
+                        <div>
+                          <div className="font-medium text-sm">
+                            Session #{session.id}
+                          </div>
+                          <div className={`text-xs flex items-center mt-1 ${
+                            isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                          }`}>
+                            <Calendar className="w-3 h-3 mr-1" />
+                            {formatDate(session.created_at)}
+                          </div>
+                          {session.persona && (
+                            <div className={`text-xs mt-1 ${
+                              isDarkMode ? 'text-blue-400' : 'text-blue-600'
+                            }`}>
+                              👤 {session.persona}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleLoadHistorySession(session);
+                          }}
+                          className={`text-xs px-2 py-1 rounded transition-colors ${
+                            isDarkMode 
+                              ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                              : 'bg-blue-100 hover:bg-blue-200 text-blue-700'
+                          }`}
                         >
-                          {tag}
-                        </span>
-                      ))}
+                          Load
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleHistoryExpansion(session.id);
+                          }}
+                          className="p-1 hover:bg-black hover:bg-opacity-10 rounded"
+                        >
+                          {expandedHistoryItems.has(session.id) ? (
+                            <ChevronDown className="w-4 h-4" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
                     </div>
+
+                    {/* Session Documents (when expanded) */}
+                    {expandedHistoryItems.has(session.id) && (
+                      <div className={`${
+                        isDarkMode ? 'bg-gray-800 border-t border-gray-600' : 'bg-white border-t border-gray-200'
+                      }`}>
+                        {session.documents && session.documents.length > 0 ? (
+                          <div className="p-3">
+                            <div className={`text-xs font-medium mb-2 ${
+                              isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                            }`}>
+                              📄 Documents ({session.documents.length})
+                            </div>
+                            {session.documents.map((document, index) => (
+                              <div
+                                key={`${session.id}-${index}`}
+                                className={`p-2 mb-2 rounded border-l-4 transition-colors ${
+                                  isDarkMode 
+                                    ? 'bg-gray-700 border-blue-500 text-gray-300' 
+                                    : 'bg-gray-50 border-blue-400 text-gray-700'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center">
+                                    <FileText className="w-3 h-3 mr-2 flex-shrink-0" />
+                                    <span className="text-sm truncate">{document.filename}</span>
+                                  </div>
+                                </div>
+                                <div className={`text-xs mt-1 flex items-center ${
+                                  isDarkMode ? 'text-gray-500' : 'text-gray-500'
+                                }`}>
+                                  <Calendar className="w-3 h-3 mr-1" />
+                                  Uploaded: {formatDate(document.upload_timestamp)}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className={`p-3 text-center text-sm ${
+                            isDarkMode ? 'text-gray-500' : 'text-gray-500'
+                          }`}>
+                            No documents found in this session
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
-              
-              {getFilteredDocuments().length === 0 && (
-                <div className={`text-center py-8 ${
-                  isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                }`}>
-                  <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-sm">No documents found</p>
-                  <p className="text-xs">Upload some PDFs to get started</p>
-                </div>
-              )}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </>
       ) : (

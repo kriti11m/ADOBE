@@ -8,7 +8,6 @@ import FinalAdobePDFViewer from './components/FinalAdobePDFViewer';
 import SmartConnections from './components/SmartConnections';
 import PDFUploader from './components/PDFUploader';
 import CollectionUploader from './components/CollectionUploader';
-import HistoryPanel from './components/HistoryPanel';
 import PodcastButton from './components/PodcastButton';
 import { Headphones } from 'lucide-react';
 import backendService from './services/backendService';
@@ -58,9 +57,6 @@ function App() {
   const [pdfStructure, setPdfStructure] = useState(null);
   const [isExtractingStructure, setIsExtractingStructure] = useState(false);
   const [currentSection, setCurrentSection] = useState(null);
-  
-  // History Panel State
-  const [showHistoryPanel, setShowHistoryPanel] = useState(false);
   
   // Document Outline State
   const [showDocumentOutline, setShowDocumentOutline] = useState(false);
@@ -555,20 +551,10 @@ function App() {
     };
   }, [audioUrl]);
 
-  // History Panel handlers
-  const handleOpenHistory = () => {
-    setShowHistoryPanel(true);
-  };
-
-  const handleCloseHistory = () => {
-    setShowHistoryPanel(false);
-  };
-
   const handleLoadSession = (session) => {
-    console.log('Loading session:', session);
-    // Here you can implement loading a session - for now just close the panel
+    console.log('Loading session from history tab:', session);
+    // Here you can implement loading a session
     // You could restore documents, recommendations, etc. from the session data
-    setShowHistoryPanel(false);
     
     // If the session has documents, you could restore them
     if (session.documents && session.documents.length > 0) {
@@ -605,7 +591,6 @@ function App() {
         <Navigation 
           userProfile={userProfile}
           isProcessing={isProcessing}
-          onOpenHistory={handleOpenHistory}
           onRestartTutorial={handleRestartTutorial}
         />
 
@@ -622,6 +607,7 @@ function App() {
             onSelectCollection={handleSelectCollection}
             onShowCollectionUploader={() => setShowCollectionUploader(true)}
             onCollectionDocumentSelect={handleCollectionDocumentSelect}
+            onLoadSession={handleLoadSession}
           />
 
           <div className="flex-1 flex">
@@ -710,13 +696,6 @@ function App() {
             </div>
           </div>
         )}
-
-        {/* History Panel */}
-        <HistoryPanel
-          isOpen={showHistoryPanel}
-          onClose={handleCloseHistory}
-          onLoadSession={handleLoadSession}
-        />
 
         {/* Podcast Button */}
         <div id="podcast-button" className="fixed bottom-6 right-6 z-40">

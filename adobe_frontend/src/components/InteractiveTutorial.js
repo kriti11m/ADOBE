@@ -29,6 +29,15 @@ const InteractiveTutorial = ({ onComplete }) => {
       highlight: { enabled: true }
     },
     {
+      id: 'dark-mode',
+      title: 'Dark Mode Toggle',
+      description: 'Switch between light and dark themes for comfortable viewing in any lighting condition. Your eyes will thank you!',
+      target: 'dark-mode-toggle',
+      position: 'bottom',
+      arrow: ArrowDown,
+      highlight: { enabled: true }
+    },
+    {
       id: 'document-sidebar',
       title: 'Document Library',
       description: 'Upload PDFs, create collections, and manage your document library. Previously analyzed documents get special badges!',
@@ -38,21 +47,39 @@ const InteractiveTutorial = ({ onComplete }) => {
       highlight: { enabled: true }
     },
     {
-      id: 'upload-features',
-      title: 'Upload Options',
-      description: 'Quick upload for single documents or bulk upload for building your complete library. Collections help organize related documents.',
-      target: 'upload-buttons',
+      id: 'collections',
+      title: 'Collections Tab',
+      description: 'Create collections to analyze multiple related documents together. Find connections and patterns across your entire document library.',
+      target: 'collections-tab',
       position: 'right',
       arrow: ArrowRight,
       highlight: { enabled: true }
     },
     {
-      id: 'pdf-viewer',
-      title: 'Adobe PDF Viewer',
-      description: 'Experience 100% fidelity PDF rendering with Adobe\'s powerful viewer. Navigate, zoom, and interact with your documents seamlessly.',
+      id: 'history-tab',
+      title: 'Analysis History Tab',
+      description: 'Access your complete analysis history through the History tab in the sidebar. View past sessions, collections, and all analyzed documents with timestamps.',
+      target: 'history-tab',
+      position: 'right',
+      arrow: ArrowRight,
+      highlight: { enabled: true }
+    },
+    {
+      id: 'document-outline',
+      title: 'Document Outline Panel',
+      description: 'When you select a document, the outline panel shows the document structure, sections, and allows easy navigation through your PDF.',
       target: 'pdf-viewer',
-      position: 'top',
-      arrow: ArrowUp,
+      position: 'left',
+      arrow: ArrowLeft,
+      highlight: { enabled: true }
+    },
+    {
+      id: 'upload-pdf',
+      title: 'Upload PDF Features',
+      description: 'Quick upload for single documents or bulk upload for building your complete library. Collections help organize related documents.',
+      target: 'upload-documents',
+      position: 'right',
+      arrow: ArrowRight,
       highlight: { enabled: true }
     },
     {
@@ -65,12 +92,12 @@ const InteractiveTutorial = ({ onComplete }) => {
       highlight: { enabled: true }
     },
     {
-      id: 'collections',
-      title: 'Cross-Document Analysis',
-      description: 'Create collections to analyze multiple related documents together. Find connections and patterns across your entire document library.',
-      target: 'collections',
-      position: 'right',
-      arrow: ArrowRight,
+      id: 'insights',
+      title: 'AI-Powered Insights',
+      description: 'Generate intelligent insights, recommendations, and analysis from your documents. Get deep understanding with AI assistance.',
+      target: 'smart-connections',
+      position: 'left',
+      arrow: ArrowLeft,
       highlight: { enabled: true }
     },
     {
@@ -80,24 +107,6 @@ const InteractiveTutorial = ({ onComplete }) => {
       target: 'podcast-button',
       position: 'top',
       arrow: ArrowUp,
-      highlight: { enabled: true }
-    },
-    {
-      id: 'history-panel',
-      title: 'Analysis History',
-      description: 'Track all your previous analysis sessions. Revisit past insights and maintain continuity across your research.',
-      target: 'history-button',
-      position: 'bottom',
-      arrow: ArrowDown,
-      highlight: { enabled: true }
-    },
-    {
-      id: 'dark-mode',
-      title: 'Dark Mode Toggle',
-      description: 'Switch between light and dark themes for comfortable viewing in any lighting condition. Your eyes will thank you!',
-      target: 'dark-mode-toggle',
-      position: 'bottom',
-      arrow: ArrowDown,
       highlight: { enabled: true }
     },
     {
@@ -168,10 +177,14 @@ const InteractiveTutorial = ({ onComplete }) => {
 
     return (
       <div className="fixed inset-0 pointer-events-none z-40">
-        {/* Full screen blur overlay */}
+        {/* Top section - above highlighted element */}
         <div 
-          className="absolute inset-0"
+          className="absolute"
           style={{
+            top: 0,
+            left: 0,
+            right: 0,
+            height: `${highlightedElement.top - 8}px`,
             background: isDarkMode 
               ? 'rgba(0, 0, 0, 0.8)' 
               : 'rgba(0, 0, 0, 0.6)',
@@ -179,20 +192,62 @@ const InteractiveTutorial = ({ onComplete }) => {
           }}
         />
         
-        {/* Clear spotlight for highlighted element */}
+        {/* Left section - beside highlighted element */}
+        <div 
+          className="absolute"
+          style={{
+            top: `${highlightedElement.top - 8}px`,
+            left: 0,
+            width: `${highlightedElement.left - 8}px`,
+            height: `${highlightedElement.height + 16}px`,
+            background: isDarkMode 
+              ? 'rgba(0, 0, 0, 0.8)' 
+              : 'rgba(0, 0, 0, 0.6)',
+            backdropFilter: 'blur(4px)'
+          }}
+        />
+        
+        {/* Right section - beside highlighted element */}
+        <div 
+          className="absolute"
+          style={{
+            top: `${highlightedElement.top - 8}px`,
+            left: `${highlightedElement.left + highlightedElement.width + 8}px`,
+            right: 0,
+            height: `${highlightedElement.height + 16}px`,
+            background: isDarkMode 
+              ? 'rgba(0, 0, 0, 0.8)' 
+              : 'rgba(0, 0, 0, 0.6)',
+            backdropFilter: 'blur(4px)'
+          }}
+        />
+        
+        {/* Bottom section - below highlighted element */}
+        <div 
+          className="absolute"
+          style={{
+            top: `${highlightedElement.top + highlightedElement.height + 8}px`,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: isDarkMode 
+              ? 'rgba(0, 0, 0, 0.8)' 
+              : 'rgba(0, 0, 0, 0.6)',
+            backdropFilter: 'blur(4px)'
+          }}
+        />
+        
+        {/* Highlight border around the clear element */}
         <div
-          className="absolute bg-transparent rounded-lg tutorial-highlight"
+          className="absolute rounded-lg tutorial-highlight border-3"
           style={{
             top: `${highlightedElement.top - 8}px`,
             left: `${highlightedElement.left - 8}px`,
             width: `${highlightedElement.width + 16}px`,
             height: `${highlightedElement.height + 16}px`,
-            boxShadow: `
-              0 0 0 3px #3B82F6,
-              0 0 0 9999px ${isDarkMode ? 'rgba(0, 0, 0, 0.8)' : 'rgba(0, 0, 0, 0.6)'}
-            `,
+            border: '3px solid #3B82F6',
             borderRadius: '8px',
-            zIndex: 41
+            zIndex: 43
           }}
         />
         
@@ -205,7 +260,7 @@ const InteractiveTutorial = ({ onComplete }) => {
             width: `${highlightedElement.width + 24}px`,
             height: `${highlightedElement.height + 24}px`,
             opacity: 0.8,
-            zIndex: 42
+            zIndex: 44
           }}
         />
       </div>
