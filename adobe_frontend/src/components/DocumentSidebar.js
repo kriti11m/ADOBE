@@ -19,7 +19,7 @@ const DocumentSidebar = ({
   const [activeTab, setActiveTab] = useState('collections');
   const [expandedCollections, setExpandedCollections] = useState(new Set());
   const [expandedHistoryItems, setExpandedHistoryItems] = useState(new Set());
-  const [historyData, setHistoryData] = useState([]);
+  const [collectionHistory, setCollectionHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const { isDarkMode } = useDarkMode();
 
@@ -33,36 +33,64 @@ const DocumentSidebar = ({
   // Load history when history tab is selected
   useEffect(() => {
     if (activeTab === 'history') {
-      loadHistory();
+      loadCollectionHistory();
     }
-  }, [activeTab]);
+  }, [activeTab, collections]); // Add collections as dependency
 
-  const loadHistory = async () => {
+  const loadCollectionHistory = () => {
     setLoadingHistory(true);
     try {
-      const response = await historyService.getHistory(50, 0);
-      setHistoryData(response.history || []);
+      // Get collections from localStorage or use current collections
+      const savedCollections = JSON.parse(localStorage.getItem('connectpdf-collection-history') || '[]');
+      const allCollections = [...savedCollections, ...collections];
+      
+      // Remove duplicates based on ID and sort by creation date
+      const uniqueCollections = allCollections.filter((collection, index, arr) => 
+        arr.findIndex(c => c.id === collection.id) === index
+      ).sort((a, b) => new Date(b.createdAt || Date.now()) - new Date(a.createdAt || Date.now()));
+      
+      setCollectionHistory(uniqueCollections);
     } catch (error) {
-      console.error('Error loading history:', error);
-      setHistoryData([]);
+      console.error('Error loading collection history:', error);
+      setCollectionHistory(collections);
     } finally {
       setLoadingHistory(false);
     }
   };
 
-  const toggleHistoryExpansion = (sessionId) => {
+  // Save collections to history when new collections are added
+  useEffect(() => {
+    if (collections.length > 0) {
+      const existingHistory = JSON.parse(localStorage.getItem('connectpdf-collection-history') || '[]');
+      const updatedHistory = [...existingHistory];
+      
+      collections.forEach(collection => {
+        if (!updatedHistory.find(h => h.id === collection.id)) {
+          updatedHistory.push({
+            ...collection,
+            addedToHistory: new Date().toISOString()
+          });
+        }
+      });
+      
+      localStorage.setItem('connectpdf-collection-history', JSON.stringify(updatedHistory));
+    }
+  }, [collections]);
+
+  const toggleHistoryExpansion = (collectionId) => {
     const newExpanded = new Set(expandedHistoryItems);
-    if (newExpanded.has(sessionId)) {
-      newExpanded.delete(sessionId);
+    if (newExpanded.has(collectionId)) {
+      newExpanded.delete(collectionId);
     } else {
-      newExpanded.add(sessionId);
+      newExpanded.add(collectionId);
     }
     setExpandedHistoryItems(newExpanded);
   };
 
-  const handleLoadHistorySession = (session) => {
-    if (onLoadSession) {
-      onLoadSession(session);
+  const handleLoadHistoryCollection = (collection) => {
+    // Load a previous collection
+    if (onSelectCollection) {
+      onSelectCollection(collection);
     }
   };
 
@@ -208,52 +236,56 @@ const DocumentSidebar = ({
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
                 <p className="text-sm">Loading history...</p>
               </div>
-            ) : historyData.length === 0 ? (
+            ) : collectionHistory.length === 0 ? (
               <div className={`text-center py-8 ${
                 isDarkMode ? 'text-gray-400' : 'text-gray-500'
               }`}>
                 <History className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p className="text-sm">No analysis history found</p>
-                <p className="text-xs">Start analyzing documents to build your history</p>
+                <p className="text-sm">No collection history found</p>
+                <p className="text-xs">Create collections to build your history</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {historyData.map((session) => (
-                  <div key={session.id} className={`border rounded-lg overflow-hidden ${
+                {collectionHistory.map((collection) => (
+                  <div key={collection.id} className={`border rounded-lg overflow-hidden ${
                     isDarkMode ? 'border-gray-600' : 'border-gray-200'
                   }`}>
-                    {/* Session Header */}
+                    {/* Collection Header */}
                     <div
                       className={`p-3 cursor-pointer transition-colors flex items-center justify-between ${
-                        isDarkMode ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
+                        activeCollection?.id === collection.id
+                          ? isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-900'
+                          : isDarkMode ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
                       }`}
                     >
                       <div className="flex items-center flex-1">
-                        <History className="w-4 h-4 mr-2 flex-shrink-0" />
+                        <Folder className="w-4 h-4 mr-2 flex-shrink-0" />
                         <div>
                           <div className="font-medium text-sm">
-                            Session #{session.id}
+                            {collection.name}
                           </div>
                           <div className={`text-xs flex items-center mt-1 ${
-                            isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                            activeCollection?.id === collection.id
+                              ? isDarkMode ? 'text-blue-200' : 'text-blue-600'
+                              : isDarkMode ? 'text-gray-400' : 'text-gray-500'
                           }`}>
                             <Calendar className="w-3 h-3 mr-1" />
-                            {formatDate(session.created_at)}
+                            {formatDate(collection.createdAt || collection.addedToHistory)}
                           </div>
-                          {session.persona && (
-                            <div className={`text-xs mt-1 ${
-                              isDarkMode ? 'text-blue-400' : 'text-blue-600'
-                            }`}>
-                              👤 {session.persona}
-                            </div>
-                          )}
+                          <div className={`text-xs mt-1 ${
+                            activeCollection?.id === collection.id
+                              ? isDarkMode ? 'text-blue-200' : 'text-blue-600'
+                              : isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                          }`}>
+                            📄 {collection.documents?.length || 0} documents
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleLoadHistorySession(session);
+                            handleLoadHistoryCollection(collection);
                           }}
                           className={`text-xs px-2 py-1 rounded transition-colors ${
                             isDarkMode 
@@ -266,11 +298,11 @@ const DocumentSidebar = ({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            toggleHistoryExpansion(session.id);
+                            toggleHistoryExpansion(collection.id);
                           }}
                           className="p-1 hover:bg-black hover:bg-opacity-10 rounded"
                         >
-                          {expandedHistoryItems.has(session.id) ? (
+                          {expandedHistoryItems.has(collection.id) ? (
                             <ChevronDown className="w-4 h-4" />
                           ) : (
                             <ChevronRight className="w-4 h-4" />
@@ -279,39 +311,48 @@ const DocumentSidebar = ({
                       </div>
                     </div>
 
-                    {/* Session Documents (when expanded) */}
-                    {expandedHistoryItems.has(session.id) && (
+                    {/* Collection Documents (when expanded) */}
+                    {expandedHistoryItems.has(collection.id) && (
                       <div className={`${
                         isDarkMode ? 'bg-gray-800 border-t border-gray-600' : 'bg-white border-t border-gray-200'
                       }`}>
-                        {session.documents && session.documents.length > 0 ? (
+                        {collection.documents && collection.documents.length > 0 ? (
                           <div className="p-3">
                             <div className={`text-xs font-medium mb-2 ${
                               isDarkMode ? 'text-gray-400' : 'text-gray-600'
                             }`}>
-                              📄 Documents ({session.documents.length})
+                              📄 Documents ({collection.documents.length})
                             </div>
-                            {session.documents.map((document, index) => (
+                            {collection.documents.map((document, index) => (
                               <div
-                                key={`${session.id}-${index}`}
-                                className={`p-2 mb-2 rounded border-l-4 transition-colors ${
-                                  isDarkMode 
-                                    ? 'bg-gray-700 border-blue-500 text-gray-300' 
-                                    : 'bg-gray-50 border-blue-400 text-gray-700'
+                                key={`${collection.id}-${index}`}
+                                onClick={() => handleCollectionDocumentSelect(document, collection)}
+                                className={`p-2 mb-2 rounded border-l-4 transition-colors cursor-pointer ${
+                                  currentDocument?.name === document.name
+                                    ? isDarkMode 
+                                      ? 'bg-blue-600 border-blue-400 text-white' 
+                                      : 'bg-blue-100 border-blue-400 text-blue-900'
+                                    : isDarkMode 
+                                      ? 'bg-gray-700 border-blue-500 text-gray-300 hover:bg-gray-600' 
+                                      : 'bg-gray-50 border-blue-400 text-gray-700 hover:bg-gray-100'
                                 }`}
                               >
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center">
                                     <FileText className="w-3 h-3 mr-2 flex-shrink-0" />
-                                    <span className="text-sm truncate">{document.filename}</span>
+                                    <span className="text-sm truncate">{document.name}</span>
                                   </div>
                                 </div>
-                                <div className={`text-xs mt-1 flex items-center ${
-                                  isDarkMode ? 'text-gray-500' : 'text-gray-500'
-                                }`}>
-                                  <Calendar className="w-3 h-3 mr-1" />
-                                  Uploaded: {formatDate(document.upload_timestamp)}
-                                </div>
+                                {document.timestamp && (
+                                  <div className={`text-xs mt-1 flex items-center ${
+                                    currentDocument?.name === document.name
+                                      ? isDarkMode ? 'text-blue-200' : 'text-blue-600'
+                                      : isDarkMode ? 'text-gray-500' : 'text-gray-500'
+                                  }`}>
+                                    <Calendar className="w-3 h-3 mr-1" />
+                                    Added: {document.timestamp}
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -319,7 +360,7 @@ const DocumentSidebar = ({
                           <div className={`p-3 text-center text-sm ${
                             isDarkMode ? 'text-gray-500' : 'text-gray-500'
                           }`}>
-                            No documents found in this session
+                            No documents found in this collection
                           </div>
                         )}
                       </div>
