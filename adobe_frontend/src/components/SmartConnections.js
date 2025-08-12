@@ -204,7 +204,7 @@ const SmartConnections = ({
   // Main view - always show bulb, outline is now in separate panel
   if (view === 'bulb') {
     return (
-      <div className={`w-80 p-4 transition-colors duration-300 ${
+      <div id="smart-connections" className={`w-80 p-4 transition-colors duration-300 ${
         isDarkMode ? 'bg-gray-800' : 'bg-white'
       } border-l ${isDarkMode ? 'border-gray-700' : 'border-gray-200'} flex-shrink-0`}>
         <div className="flex items-center justify-center h-full min-h-[500px]">
@@ -268,7 +268,7 @@ const SmartConnections = ({
   // Connections view
   if (view === 'connections') {
     return (
-      <div className={`w-80 flex flex-col transition-colors duration-300 ${
+      <div id="recommendations" className={`w-80 flex flex-col transition-colors duration-300 ${
         isDarkMode 
           ? 'bg-gray-800 border-l border-gray-700' 
           : 'bg-white border-l border-gray-200'
@@ -417,6 +417,7 @@ const SmartConnections = ({
           isDarkMode ? 'border-gray-700' : 'border-gray-200'
         }`}>
           <button 
+            id="insights-button"
             onClick={handleGenerateInsights}
             disabled={isGeneratingInsights}
             className={`w-full text-xs py-2 px-3 rounded transition-colors ${

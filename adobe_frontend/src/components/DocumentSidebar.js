@@ -96,11 +96,11 @@ const DocumentSidebar = ({
   };
 
   return (
-    <div className={`w-1/5 flex flex-col h-full transition-colors duration-300 ${
+    <div id="document-sidebar" className={`w-80 border-r transition-colors duration-300 ${
       isDarkMode 
-        ? 'bg-gray-800 border-r border-gray-700' 
-        : 'bg-white border-r border-gray-200'
-    }`}>
+        ? 'bg-gray-800 border-gray-700' 
+        : 'bg-white border-gray-200'
+    } flex flex-col`}>
       {/* Header */}
       <div className={`p-4 border-b transition-colors duration-300 ${
         isDarkMode ? 'border-gray-700' : 'border-gray-200'
@@ -181,22 +181,24 @@ const DocumentSidebar = ({
             </div>
 
             {/* Bulk Upload Button */}
-            <button
-              onClick={onShowUploader}
-              className={`w-full py-2 px-4 rounded-lg text-sm font-medium transition-colors mb-4 ${
-                isDarkMode 
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                  : 'bg-blue-100 hover:bg-blue-200 text-blue-600'
-              }`}
-            >
-              <Upload className="w-4 h-4 inline mr-2" />
-              Bulk Upload & Process
-            </button>
+            <div id="upload-buttons">
+              <button
+                onClick={onShowUploader}
+                className={`w-full py-2 px-4 rounded-lg text-sm font-medium transition-colors mb-4 ${
+                  isDarkMode 
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                    : 'bg-blue-100 hover:bg-blue-200 text-blue-600'
+                }`}
+              >
+                <Upload className="w-4 h-4 inline mr-2" />
+                Bulk Upload & Process
+              </button>
+            </div>
           </>
         ) : (
           // Collections Tab Content
           <>
-            <div className="flex items-center justify-between mb-4">
+            <div id="collections" className="flex items-center justify-between mb-4">
               <h2 className={`text-lg font-semibold flex items-center ${
                 isDarkMode ? 'text-white' : 'text-gray-900'
               }`}>

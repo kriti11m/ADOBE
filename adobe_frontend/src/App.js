@@ -1,4 +1,5 @@
 import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
+import InteractiveTutorial from './components/InteractiveTutorial';
 import OnboardingModal from './components/OnboardingModal';
 import Navigation from './components/Navigation';
 import DocumentSidebar from './components/DocumentSidebar';
@@ -26,7 +27,13 @@ export const useDarkMode = () => {
 };
 
 function App() {
-  const [showOnboarding, setShowOnboarding] = useState(true);
+  // Check if user has seen tutorial before
+  const [showTutorial, setShowTutorial] = useState(() => {
+    // Show tutorial automatically on very first visit
+    const hasSeenTutorial = localStorage.getItem('connectpdf-tutorial-seen');
+    return !hasSeenTutorial; // Show tutorial if user has never seen it
+  });
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [userProfile, setUserProfile] = useState({ role: '', task: '' });
   const [currentDocument, setCurrentDocument] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -85,6 +92,42 @@ function App() {
       document.documentElement.classList.remove('dark');
     }
   }, [isDarkMode]);
+
+  // Development helper: Press Ctrl+Shift+T to restart tutorial
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+        console.log('🎯 Restarting tutorial via keyboard shortcut');
+        // Clear both tutorial flags and restart the tutorial
+        localStorage.removeItem('connectpdf-tutorial-seen');
+        localStorage.removeItem('connectpdf-tutorial-completed');
+        setShowTutorial(true);
+        setShowOnboarding(false);
+      }
+    };
+
+    if (process.env.NODE_ENV === 'development') {
+      window.addEventListener('keydown', handleKeyPress);
+      return () => window.removeEventListener('keydown', handleKeyPress);
+    }
+  }, []);
+
+  const handleTutorialComplete = () => {
+    setShowTutorial(false);
+    setShowOnboarding(true);
+    // Mark tutorial as seen (first time experience completed)
+    localStorage.setItem('connectpdf-tutorial-seen', 'true');
+    // Also mark as completed for backwards compatibility
+    localStorage.setItem('connectpdf-tutorial-completed', 'true');
+  };
+
+  const handleRestartTutorial = () => {
+    setShowTutorial(true);
+    setShowOnboarding(false);
+    // Clear both tutorial flags to reset the experience
+    localStorage.removeItem('connectpdf-tutorial-seen');
+    localStorage.removeItem('connectpdf-tutorial-completed');
+  };
 
   const handleOnboardingComplete = (role, task) => {
     setUserProfile({ role, task });
@@ -551,6 +594,10 @@ function App() {
           ? 'bg-gray-900 text-white' 
           : 'bg-gray-50 text-gray-900'
       }`}>
+        {showTutorial && (
+          <InteractiveTutorial onComplete={handleTutorialComplete} />
+        )}
+
         {showOnboarding && (
           <OnboardingModal onComplete={handleOnboardingComplete} />
         )}
@@ -559,10 +606,12 @@ function App() {
           userProfile={userProfile}
           isProcessing={isProcessing}
           onOpenHistory={handleOpenHistory}
+          onRestartTutorial={handleRestartTutorial}
         />
 
         <div className="flex" style={{ height: 'calc(100vh - 80px)' }}>
           <DocumentSidebar 
+            id="document-sidebar"
             documents={documents}
             onDocumentSelect={handleDocumentSelect}
             onFileUpload={handleFileUpload}
@@ -588,7 +637,7 @@ function App() {
               />
             )}
 
-            <div className="flex-1">
+            <div id="pdf-viewer" className="flex-1">
               <FinalAdobePDFViewer 
                 ref={pdfViewerRef}
                 selectedDocument={currentDocument}
@@ -600,6 +649,7 @@ function App() {
             </div>
 
             <SmartConnections 
+              id="smart-connections"
               currentDocument={currentDocument}
               recommendations={recommendations}
               currentSessionId={currentSessionId}
@@ -669,7 +719,7 @@ function App() {
         />
 
         {/* Podcast Button */}
-        <div className="fixed bottom-6 right-6 z-40">
+        <div id="podcast-button" className="fixed bottom-6 right-6 z-40">
           <PodcastButton
             onClick={handlePodcastGeneration}
             currentDocument={currentDocument}

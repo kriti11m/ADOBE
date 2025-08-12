@@ -1,12 +1,12 @@
 import React from 'react';
-import { Settings, Moon, Sun, History } from 'lucide-react';
+import { Settings, Moon, Sun, History, HelpCircle } from 'lucide-react';
 import { useDarkMode } from '../App';
 
-const Navigation = ({ userProfile, isProcessing, onOpenHistory }) => {
+const Navigation = ({ userProfile, isProcessing, onOpenHistory, onRestartTutorial }) => {
   const { isDarkMode, toggleDarkMode } = useDarkMode();
 
   return (
-    <nav className={`shadow-sm border-b transition-colors duration-300 ${
+    <nav id="nav" className={`shadow-sm border-b transition-colors duration-300 ${
       isDarkMode 
         ? 'bg-gray-800 border-gray-700 text-white' 
         : 'bg-white border-gray-200 text-gray-900'
@@ -62,8 +62,22 @@ const Navigation = ({ userProfile, isProcessing, onOpenHistory }) => {
             </div>
           )}
           
+          {/* Tutorial Help Button */}
+          <button 
+            onClick={onRestartTutorial}
+            className={`p-2 rounded-lg transition-colors ${
+              isDarkMode 
+                ? 'text-blue-400 hover:text-blue-300 hover:bg-gray-700' 
+                : 'text-blue-600 hover:text-blue-900 hover:bg-gray-100'
+            }`}
+            title="Restart Tutorial"
+          >
+            <HelpCircle className="w-6 h-6" />
+          </button>
+
           {/* History Button */}
           <button 
+            id="history-button"
             onClick={onOpenHistory}
             className={`p-2 rounded-lg transition-colors ${
               isDarkMode 
@@ -77,6 +91,7 @@ const Navigation = ({ userProfile, isProcessing, onOpenHistory }) => {
           
           {/* Dark Mode Toggle */}
           <button 
+            id="dark-mode-toggle"
             onClick={toggleDarkMode}
             className={`p-2 rounded-lg transition-colors ${
               isDarkMode 
