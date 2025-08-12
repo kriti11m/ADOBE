@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import historyService from '../services/historyService';
 
-const HistoryPanel = ({ isOpen, onClose, onLoadSession }) => {
+const HistoryPanel = ({ isOpen, onClose, onLoadSession, currentProfile }) => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -19,7 +19,7 @@ const HistoryPanel = ({ isOpen, onClose, onLoadSession }) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await historyService.getHistory(50, 0);
+      const response = await historyService.getHistory(50, 0, currentProfile?.id);
       setHistory(response.history || []);
     } catch (err) {
       setError('Failed to load history');
@@ -73,7 +73,14 @@ const HistoryPanel = ({ isOpen, onClose, onLoadSession }) => {
       <div className="bg-gray-900 text-white rounded-lg w-5/6 h-5/6 flex flex-col">
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b border-gray-700">
-          <h2 className="text-xl font-bold">📚 Analysis History</h2>
+          <div>
+            <h2 className="text-xl font-bold">📚 Analysis History</h2>
+            {currentProfile && (
+              <p className="text-sm text-gray-400 mt-1">
+                Showing history for: <span className="text-blue-400">{currentProfile.profile_name}</span>
+              </p>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-white text-2xl"

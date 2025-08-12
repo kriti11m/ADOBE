@@ -34,24 +34,17 @@ const OnboardingModal = ({ onComplete }) => {
             <label className={`block text-sm font-medium mb-2 ${
               isDarkMode ? 'text-gray-300' : 'text-gray-700'
             }`}>I am a...</label>
-            <select 
+            <input 
+              type="text" 
               value={role}
               onChange={(e) => setRole(e.target.value)}
+              placeholder="e.g., Student, Research Scholar, Investment Analyst, Medical Student, Business Analyst"
               className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
                 isDarkMode 
-                  ? 'bg-gray-700 border-gray-600 text-white' 
-                  : 'border-gray-300 text-gray-900'
+                  ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                  : 'border-gray-300 text-gray-900 placeholder-gray-500'
               }`}
-            >
-              <option value="">Select your role</option>
-              <option value="Student">Student</option>
-              <option value="Researcher">Researcher</option>
-              <option value="Analyst">Analyst</option>
-              <option value="Consultant">Consultant</option>
-              <option value="Manager">Manager</option>
-              <option value="Developer">Developer</option>
-              <option value="Other">Other</option>
-            </select>
+            />
           </div>
           
           <div>

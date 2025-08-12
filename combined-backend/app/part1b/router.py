@@ -24,6 +24,7 @@ class AnalysisRequest(BaseModel):
 async def analyze_documents(
     persona: str = Form("Researcher"),
     job: str = Form("Analyze document content and extract relevant sections"),
+    profile_id: int = Form(None),
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
@@ -85,18 +86,23 @@ async def analyze_documents(
             persona=persona,
             job_description=job,
             pdf_documents=stored_documents,
-            processing_time=processing_time
+            processing_time=processing_time,
+            profile_id=profile_id
         )
         
-        # Store extracted sections
-        if 'extracted_sections' in result:
-            history_service.store_extracted_sections(
-                session_id=session.id,
-                sections=result['extracted_sections']
-            )
-        
-        # Add session ID to result
-        result['session_id'] = session.id
+        # Store extracted sections and add session ID if session was created
+        if session:
+            if 'extracted_sections' in result:
+                history_service.store_extracted_sections(
+                    session_id=session.id,
+                    sections=result['extracted_sections']
+                )
+            # Add session ID to result
+            result['session_id'] = session.id
+        else:
+            # No session created because no profile provided
+            result['session_id'] = None
+            result['warning'] = 'Analysis completed but session not saved - profile required for history tracking'
         
         return result
         
@@ -120,7 +126,8 @@ async def analyze_documents(
 async def analyze_single_document(
     file: UploadFile = File(...),
     persona: str = Form("Researcher"),
-    job: str = Form("Analyze document content and extract relevant sections")
+    job: str = Form("Analyze document content and extract relevant sections"),
+    profile_id: int = Form(None)
 ) -> Dict[str, Any]:
     """
     Analyze a single PDF document.
@@ -133,7 +140,7 @@ async def analyze_single_document(
     Returns:
         Dict containing analysis results
     """
-    return await analyze_documents(persona=persona, job=job, files=[file])
+    return await analyze_documents(persona=persona, job=job, profile_id=profile_id, files=[file])
 
 @router.get("/health")
 async def health_check():

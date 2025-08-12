@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
+import os
 from ..database.database import get_db
 from ..services.history_service import HistoryService
 from ..database.models import AnalysisSession, PDFDocument, ExtractedSection, GeneratedInsight
@@ -18,24 +20,18 @@ async def test_history_endpoint():
 async def get_analysis_history(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    profile_id: int = Query(None, description="Filter by profile ID"),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
-    """Get paginated analysis history, optionally filtered by profile"""
+    """Get paginated analysis history"""
     try:
         history_service = HistoryService(db)
-        history = history_service.get_analysis_history(
-            limit=limit, 
-            offset=offset, 
-            profile_id=profile_id
-        )
+        history = history_service.get_analysis_history(limit=limit, offset=offset)
         
         return {
             "history": history,
             "pagination": {
                 "limit": limit,
                 "offset": offset,
-                "profile_id": profile_id,
                 "total": len(history)
             }
         }
@@ -54,10 +50,8 @@ async def get_session_details(
         
         if not session_details:
             raise HTTPException(status_code=404, detail="Session not found")
-        
+            
         return session_details
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching session details: {str(e)}")
 
@@ -90,4 +84,63 @@ async def get_history_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
             ]
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching statistics: {str(e)}")
+
+@router.get("/document/{document_id}/download")
+async def download_document(
+    document_id: int,
+    db: Session = Depends(get_db)
+):
+    """Download a PDF document from history by document ID"""
+    try:
+        document = db.query(PDFDocument).filter(PDFDocument.id == document_id).first()
+        
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+            
+        # Check if file exists
+        if not document.file_path or not os.path.exists(document.file_path):
+            raise HTTPException(status_code=404, detail="PDF file not found on disk")
+            
+        return FileResponse(
+            path=document.file_path,
+            media_type="application/pdf",
+            filename=document.filename
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error downloading document: {str(e)}")
+
+@router.get("/document/{document_id}/blob")
+async def get_document_blob(
+    document_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get PDF document as blob data for Adobe Embed API"""
+    try:
+        document = db.query(PDFDocument).filter(PDFDocument.id == document_id).first()
+        
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+            
+        # Check if file exists
+        if not document.file_path or not os.path.exists(document.file_path):
+            raise HTTPException(status_code=404, detail="PDF file not found on disk")
+            
+        # Read file and return as response
+        with open(document.file_path, 'rb') as file:
+            pdf_content = file.read()
+            
+        from fastapi.responses import Response
+        return Response(
+            content=pdf_content,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"inline; filename={document.filename}",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "*"
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting document blob: {str(e)}")

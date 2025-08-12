@@ -1,9 +1,17 @@
-import React from 'react';
-import { Settings, Moon, Sun, HelpCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Settings, Moon, Sun, HelpCircle, User, UserPlus } from 'lucide-react';
 import { useDarkMode } from '../App';
 
-const Navigation = ({ userProfile, isProcessing, onRestartTutorial }) => {
+const Navigation = ({ 
+  userProfile, 
+  isProcessing, 
+  onRestartTutorial, 
+  currentProfile, 
+  onProfileChange, 
+  onManageProfiles 
+}) => {
   const { isDarkMode, toggleDarkMode } = useDarkMode();
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
 
   return (
     <nav id="nav" className={`shadow-sm border-b transition-colors duration-300 ${
@@ -46,8 +54,23 @@ const Navigation = ({ userProfile, isProcessing, onRestartTutorial }) => {
         </div>
         
         <div className="flex items-center space-x-4">
-          {/* User Profile */}
-          {userProfile.role && (
+          {/* Current Profile Display - Read-only */}
+          {currentProfile && (
+            <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg ${
+              isDarkMode 
+                ? 'bg-blue-900/30 text-blue-200' 
+                : 'bg-blue-50 text-blue-800'
+            }`}>
+              <span className="text-lg">👤</span>
+              <div className="text-sm">
+                <div className="font-medium">{currentProfile.profile_name}</div>
+                <div className="text-xs opacity-80">{currentProfile.persona}</div>
+              </div>
+            </div>
+          )}
+          
+          {/* User Profile (Legacy - show only if no current profile) */}
+          {!currentProfile && userProfile.role && (
             <div className={`flex items-center space-x-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
               isDarkMode 
                 ? 'bg-blue-900/50 text-blue-300 hover:bg-blue-800/50' 
@@ -62,18 +85,7 @@ const Navigation = ({ userProfile, isProcessing, onRestartTutorial }) => {
             </div>
           )}
           
-          {/* Tutorial Help Button */}
-          <button 
-            onClick={onRestartTutorial}
-            className={`p-2 rounded-lg transition-colors ${
-              isDarkMode 
-                ? 'text-blue-400 hover:text-blue-300 hover:bg-gray-700' 
-                : 'text-blue-600 hover:text-blue-900 hover:bg-gray-100'
-            }`}
-            title="Restart Tutorial"
-          >
-            <HelpCircle className="w-6 h-6" />
-          </button>
+          {/* Tutorial Help Button - Remove since it's now in settings */}
           
           {/* Dark Mode Toggle */}
           <button 
@@ -90,13 +102,86 @@ const Navigation = ({ userProfile, isProcessing, onRestartTutorial }) => {
           </button>
           
           {/* Settings */}
-          <button className={`p-2 rounded-lg transition-colors ${
-            isDarkMode 
-              ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700' 
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-          }`}>
-            <Settings className="w-6 h-6" />
-          </button>
+          <div className="relative">
+            <button 
+              onClick={() => setShowSettingsMenu(!showSettingsMenu)}
+              className={`p-2 rounded-lg transition-colors ${
+                isDarkMode 
+                  ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700' 
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              }`}
+              title="Settings"
+            >
+              <Settings className="w-6 h-6" />
+            </button>
+            
+            {/* Settings Dropdown */}
+            {showSettingsMenu && (
+              <div className="absolute right-0 mt-2 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-50">
+                <div className="p-2">
+                  {/* Profile Management Section */}
+                  <div className="pb-2 mb-2 border-b border-gray-600">
+                    <div className="text-xs text-gray-400 px-2 py-1 mb-1">Profile Management</div>
+                    
+                    <button
+                      onClick={() => {
+                        setShowSettingsMenu(false);
+                        onManageProfiles();
+                      }}
+                      className="w-full text-left p-2 rounded-lg hover:bg-gray-700 text-white text-sm flex items-center gap-2"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      Create New Profile
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        setShowSettingsMenu(false);
+                        onManageProfiles();
+                      }}
+                      className="w-full text-left p-2 rounded-lg hover:bg-gray-700 text-white text-sm flex items-center gap-2"
+                    >
+                      <User className="w-4 h-4" />
+                      Manage Profiles
+                    </button>
+                  </div>
+                  
+                  {/* Other Settings */}
+                  <div className="text-xs text-gray-400 px-2 py-1 mb-1">General</div>
+                  
+                  <button
+                    onClick={() => {
+                      setShowSettingsMenu(false);
+                      onRestartTutorial();
+                    }}
+                    className="w-full text-left p-2 rounded-lg hover:bg-gray-700 text-white text-sm flex items-center gap-2"
+                  >
+                    <HelpCircle className="w-4 h-4" />
+                    Restart Tutorial
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      setShowSettingsMenu(false);
+                      toggleDarkMode();
+                    }}
+                    className="w-full text-left p-2 rounded-lg hover:bg-gray-700 text-white text-sm flex items-center gap-2"
+                  >
+                    {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                    {isDarkMode ? 'Light Mode' : 'Dark Mode'}
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            {/* Overlay to close dropdown */}
+            {showSettingsMenu && (
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setShowSettingsMenu(false)}
+              />
+            )}
+          </div>
         </div>
       </div>
     </nav>

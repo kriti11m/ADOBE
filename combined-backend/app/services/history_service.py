@@ -1,9 +1,9 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, and_
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import hashlib
-from ..database.models import PDFDocument, AnalysisSession, ExtractedSection, GeneratedInsight
+from ..database.models import PDFDocument, AnalysisSession, ExtractedSection, GeneratedInsight, UserProfile
 
 class HistoryService:
     def __init__(self, db: Session):
@@ -37,9 +37,15 @@ class HistoryService:
     
     def create_analysis_session(self, persona: str, job_description: str, 
                               pdf_documents: List[PDFDocument], 
-                              processing_time: float = None) -> AnalysisSession:
+                              processing_time: float = None, 
+                              profile_id: int = None) -> Optional[AnalysisSession]:
         """Create a new analysis session"""
+        # Require profile_id - no default profile logic
+        if profile_id is None:
+            return None  # Cannot create session without profile
+        
         session = AnalysisSession(
+            profile_id=profile_id,
             persona=persona,
             job_description=job_description,
             processing_time_seconds=processing_time,
@@ -91,11 +97,15 @@ class HistoryService:
         
         self.db.commit()
     
-    def get_analysis_history(self, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
-        """Get analysis history with pagination"""
+    def get_analysis_history(self, limit: int = 50, offset: int = 0, profile_id: int = None) -> List[Dict[str, Any]]:
+        """Get analysis history with pagination, optionally filtered by profile"""
+        query = self.db.query(AnalysisSession)
+        
+        if profile_id is not None:
+            query = query.filter(AnalysisSession.profile_id == profile_id)
+        
         sessions = (
-            self.db.query(AnalysisSession)
-            .order_by(desc(AnalysisSession.session_timestamp))
+            query.order_by(desc(AnalysisSession.session_timestamp))
             .offset(offset)
             .limit(limit)
             .all()
@@ -117,12 +127,21 @@ class HistoryService:
                 .count()
             )
             
+            # Get profile information
+            profile_info = {}
+            if session.profile:
+                profile_info = {
+                    "profile_id": session.profile.id,
+                    "profile_name": session.profile.profile_name
+                }
+            
             history.append({
                 'session_id': session.id,
                 'timestamp': session.session_timestamp.isoformat(),
                 'persona': session.persona,
                 'job_description': session.job_description,
                 'processing_time': session.processing_time_seconds,
+                'profile': profile_info,
                 'documents': [
                     {
                         'filename': doc.filename,
@@ -136,6 +155,10 @@ class HistoryService:
             })
         
         return history
+    
+    def get_profile_analysis_history(self, profile_id: int, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+        """Get analysis history for a specific profile"""
+        return self.get_analysis_history(limit=limit, offset=offset, profile_id=profile_id)
     
     def get_session_details(self, session_id: int) -> Optional[Dict[str, Any]]:
         """Get detailed information about a specific session"""
@@ -162,7 +185,11 @@ class HistoryService:
                 'timestamp': session.session_timestamp.isoformat(),
                 'persona': session.persona,
                 'job_description': session.job_description,
-                'processing_time': session.processing_time_seconds
+                'processing_time': session.processing_time_seconds,
+                'profile': {
+                    'id': session.profile.id,
+                    'profile_name': session.profile.profile_name
+                } if session.profile else None
             },
             'documents': [
                 {

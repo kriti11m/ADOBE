@@ -13,6 +13,8 @@ from app.part1a.router import router as part1a_router
 from app.part1b.router import router as part1b_router
 from app.history.router import router as history_router
 from app.insights.router import router as insights_router
+from app.profiles.router import router as profiles_router
+from app.collections.router import router as collections_router
 
 # Create FastAPI application
 app = FastAPI(
@@ -37,6 +39,8 @@ app.include_router(part1a_router)
 app.include_router(part1b_router)
 app.include_router(history_router)
 app.include_router(insights_router)
+app.include_router(profiles_router)
+app.include_router(collections_router)
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -55,6 +59,8 @@ async def root():
                 <li><strong>Part 1B:</strong> Document Analysis System (prefix: /part1b)</li>
                 <li><strong>History:</strong> Analysis History Management (prefix: /history)</li>
                 <li><strong>Insights:</strong> AI-Powered Insights Generation (prefix: /insights)</li>
+                <li><strong>Profiles:</strong> User Profile Management (prefix: /profiles)</li>
+                <li><strong>Collections:</strong> PDF Collection Management (prefix: /collections)</li>
             </ul>
         </body>
     </html>

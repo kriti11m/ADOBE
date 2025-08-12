@@ -15,7 +15,8 @@ const SmartConnections = ({
   pdfStructure,
   isExtractingStructure,
   currentSection,
-  userProfile // Add userProfile prop
+  userProfile, // Add userProfile prop
+  currentProfile // Add currentProfile prop
 }) => {
   const [view, setView] = useState('bulb'); // 'bulb', 'connections', 'insights'
   const [selectedSection, setSelectedSection] = useState(null);
@@ -34,8 +35,14 @@ const SmartConnections = ({
       return;
     }
 
-    if (!userProfile || !userProfile.role || !userProfile.task) {
-      setInsightsError('User profile is required to generate insights.');
+    // Check if we have profile information (either from currentProfile or userProfile)
+    const hasProfile = currentProfile?.persona && currentProfile?.job_description || 
+                      userProfile?.role && userProfile?.task;
+    
+    if (!hasProfile) {
+      setInsightsError(currentProfile ? 
+        'Profile information is incomplete. Please update your profile in settings.' :
+        'Please select a profile or complete the onboarding to generate insights.');
       return;
     }
 
@@ -44,12 +51,18 @@ const SmartConnections = ({
     
     try {
       console.log('🔄 Generating insights from recommendations:', recommendations);
+      console.log('🔄 Using current profile:', currentProfile);
       console.log('🔄 Using user profile:', userProfile);
+      
+      // Use currentProfile if available, otherwise fall back to userProfile
+      const persona = currentProfile?.persona || userProfile?.role;
+      const task = currentProfile?.job_description || userProfile?.task;
+      const profileId = currentProfile?.id;
       
       const response = await backendService.generateInsightsFromRecommendations(
         recommendations,
-        userProfile.role,
-        userProfile.task,
+        persona,
+        task,
         currentSessionId // Pass session ID for cross-document analysis
       );
       
@@ -72,8 +85,14 @@ const SmartConnections = ({
 
   // Generate insights from a single section
   const handleGenerateSectionInsights = async (section) => {
-    if (!userProfile || !userProfile.role || !userProfile.task) {
-      setInsightsError('User profile is required to generate insights.');
+    // Check if we have profile information (either from currentProfile or userProfile)
+    const hasProfile = currentProfile?.persona && currentProfile?.job_description || 
+                      userProfile?.role && userProfile?.task;
+    
+    if (!hasProfile) {
+      setInsightsError(currentProfile ? 
+        'Profile information is incomplete. Please update your profile in settings.' :
+        'Please select a profile or complete the onboarding to generate insights.');
       return;
     }
 
@@ -82,12 +101,18 @@ const SmartConnections = ({
     
     try {
       console.log('🔄 Generating insights from single section:', section);
+      console.log('🔄 Using current profile:', currentProfile);
       console.log('🔄 Using user profile:', userProfile);
+      
+      // Use currentProfile if available, otherwise fall back to userProfile
+      const persona = currentProfile?.persona || userProfile?.role;
+      const task = currentProfile?.job_description || userProfile?.task;
+      const profileId = currentProfile?.id;
       
       const response = await backendService.generateInsightsFromRecommendations(
         [section], // Pass only the selected section
-        userProfile.role,
-        userProfile.task,
+        persona,
+        task,
         currentSessionId // Pass session ID for cross-document analysis
       );
       
@@ -946,17 +971,93 @@ const SmartConnections = ({
                         {generatedInsights.podcast_script.duration_estimate && (
                           <p className="text-xs opacity-75">Duration: {generatedInsights.podcast_script.duration_estimate}</p>
                         )}
-                        {generatedInsights.podcast_script.script && Array.isArray(generatedInsights.podcast_script.script) && generatedInsights.podcast_script.script.length > 0 && (
+                        {generatedInsights.podcast_script.estimated_duration && (
+                          <p className="text-xs opacity-75">Duration: {generatedInsights.podcast_script.estimated_duration}</p>
+                        )}
+                        {generatedInsights.podcast_script.script && (
                           <div>
                             <p className="text-xs font-medium mb-1">Preview:</p>
-                            <p className="text-xs italic">"{generatedInsights.podcast_script.script[0]?.content?.substring(0, 150)}..."</p>
+                            <p className="text-xs italic">
+                              "{
+                                Array.isArray(generatedInsights.podcast_script.script) 
+                                  ? generatedInsights.podcast_script.script[0]?.content?.substring(0, 150) || 'Script content...'
+                                  : typeof generatedInsights.podcast_script.script === 'string' 
+                                    ? generatedInsights.podcast_script.script.substring(0, 150)
+                                    : 'Script content...'
+                              }..."
+                            </p>
                           </div>
                         )}
                         <button 
                           className="mt-2 text-xs underline opacity-75 hover:opacity-100"
-                          onClick={() => console.log('Full podcast script:', generatedInsights.podcast_script)}
+                          onClick={() => {
+                            // Create a modal or expandable view to show the full script
+                            let scriptText = 'No script content available';
+                            
+                            if (generatedInsights.podcast_script.script) {
+                              if (Array.isArray(generatedInsights.podcast_script.script)) {
+                                // Regular podcast script - array of segments
+                                scriptText = generatedInsights.podcast_script.script
+                                  .map((segment, index) => {
+                                    if (typeof segment === 'object' && segment.content) {
+                                      return `${segment.segment || `Segment ${index + 1}`} (${segment.duration || 'duration unknown'}):\n${segment.content}`;
+                                    } else if (typeof segment === 'string') {
+                                      return `Segment ${index + 1}:\n${segment}`;
+                                    } else {
+                                      return `Segment ${index + 1}:\n${JSON.stringify(segment)}`;
+                                    }
+                                  })
+                                  .join('\n\n');
+                              } else if (typeof generatedInsights.podcast_script.script === 'string') {
+                                // Enhanced podcast script - plain string
+                                scriptText = generatedInsights.podcast_script.script;
+                              } else {
+                                // Script is some other format, stringify it
+                                scriptText = JSON.stringify(generatedInsights.podcast_script.script, null, 2);
+                              }
+                            }
+                            
+                            // Create a temporary modal-like display
+                            const modal = document.createElement('div');
+                            modal.style.cssText = `
+                              position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                              background: rgba(0,0,0,0.8); z-index: 10000; display: flex;
+                              align-items: center; justify-content: center; padding: 20px;
+                            `;
+                            
+                            const content = document.createElement('div');
+                            content.style.cssText = `
+                              background: white; border-radius: 8px; padding: 24px;
+                              max-width: 800px; max-height: 80vh; overflow-y: auto;
+                              box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+                            `;
+                            
+                            content.innerHTML = `
+                              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                                <h3 style="margin: 0; font-size: 18px; font-weight: bold;">🎙️ ${generatedInsights.podcast_script.title || 'Podcast Script'}</h3>
+                                <button onclick="this.closest('.modal').remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; padding: 4px;">×</button>
+                              </div>
+                              ${generatedInsights.podcast_script.duration_estimate ? `<p style="margin: 0 0 16px 0; color: #666; font-size: 14px;">Duration: ${generatedInsights.podcast_script.duration_estimate}</p>` : ''}
+                              <div style="white-space: pre-wrap; font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; font-size: 14px;">
+                                ${scriptText}
+                              </div>
+                              <div style="margin-top: 20px; text-align: right;">
+                                <button onclick="navigator.clipboard.writeText(\`${scriptText.replace(/`/g, '\\`')}\`).then(() => alert('Script copied to clipboard!'))" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-right: 8px;">Copy Script</button>
+                                <button onclick="this.closest('.modal').remove()" style="background: #6b7280; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Close</button>
+                              </div>
+                            `;
+                            
+                            modal.className = 'modal';
+                            modal.appendChild(content);
+                            document.body.appendChild(modal);
+                            
+                            // Close on background click
+                            modal.addEventListener('click', (e) => {
+                              if (e.target === modal) modal.remove();
+                            });
+                          }}
                         >
-                          View full script in console
+                          View Full Script
                         </button>
                       </>
                     )}

@@ -2,12 +2,15 @@
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 class HistoryService {
-  // Get analysis history with pagination
-  async getHistory(limit = 50, offset = 0) {
+  // Get analysis history with pagination (optionally filtered by profile)
+  async getHistory(limit = 50, offset = 0, profileId = null) {
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/history/?limit=${limit}&offset=${offset}`
-      );
+      let url = `${API_BASE_URL}/history/?limit=${limit}&offset=${offset}`;
+      if (profileId) {
+        url += `&profile_id=${profileId}`;
+      }
+      
+      const response = await fetch(url);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

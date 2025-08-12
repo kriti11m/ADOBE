@@ -7,14 +7,19 @@ const PodcastButton = ({
   currentDocument, 
   selectedSection, 
   userProfile, 
+  currentProfile, // Add currentProfile prop
   recommendations = [],
   currentSessionId = null 
 }) => {
   const [isGenerating, setIsGenerating] = useState(false);
 
   const handlePodcastGeneration = async () => {
-    if (!userProfile || !userProfile.role || !userProfile.task) {
-      alert('Please complete your profile first');
+    // Check if we have profile information (either from currentProfile or userProfile)
+    const hasProfile = currentProfile?.persona && currentProfile?.job_description || 
+                      userProfile?.role && userProfile?.task;
+    
+    if (!hasProfile) {
+      alert('Please complete your profile first. Go to Settings to create or select a profile.');
       return;
     }
 
@@ -44,11 +49,15 @@ const PodcastButton = ({
     try {
       console.log(`🎧 Generating podcast from ${contentType}:`, contentToUse);
       
+      // Use currentProfile if available, otherwise fall back to userProfile
+      const persona = currentProfile?.persona || userProfile?.role;
+      const task = currentProfile?.job_description || userProfile?.task;
+      
       // Generate podcast using backend service
       const podcastData = await backendService.generatePodcast(
         contentToUse,
-        userProfile.role,
-        userProfile.task,
+        persona,
+        task,
         currentSessionId // Pass session ID for cross-document analysis
       );
       
@@ -65,6 +74,8 @@ const PodcastButton = ({
 
   // Determine button state and text
   const hasContent = recommendations.length > 0 || selectedSection || currentDocument;
+  const hasValidProfile = currentProfile?.persona && currentProfile?.job_description || 
+                         userProfile?.role && userProfile?.task;
   const buttonText = recommendations.length > 0 
     ? `Generate Podcast (${recommendations.length} sections)`
     : selectedSection 
@@ -76,13 +87,13 @@ const PodcastButton = ({
   return (
     <button 
       onClick={handlePodcastGeneration}
-      disabled={!hasContent || isGenerating || !userProfile.role}
+      disabled={!hasContent || isGenerating || !hasValidProfile}
       className={`floating-fab text-white p-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 ${
-        !hasContent || isGenerating || !userProfile.role
+        !hasContent || isGenerating || !hasValidProfile
           ? 'bg-gray-400 cursor-not-allowed'
           : 'bg-green-600 hover:bg-green-700'
       }`}
-      title={!userProfile.role ? 'Complete your profile first' : !hasContent ? 'Select content to generate podcast' : buttonText}
+      title={!hasValidProfile ? 'Complete your profile first' : !hasContent ? 'Select content to generate podcast' : buttonText}
     >
       <div className="flex items-center space-x-2">
         {isGenerating ? (

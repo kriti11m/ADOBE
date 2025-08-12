@@ -9,12 +9,10 @@ import SmartConnections from './components/SmartConnections';
 import PDFUploader from './components/PDFUploader';
 import CollectionUploader from './components/CollectionUploader';
 import PodcastButton from './components/PodcastButton';
-import ProfileManager from './components/ProfileManager';
 import { Headphones } from 'lucide-react';
 import backendService from './services/backendService';
 import part1aService from './services/part1aService';
 import historyService from './services/historyService';
-import profileService from './services/profileService';
 
 // Create Dark Mode Context
 export const DarkModeContext = createContext();
@@ -55,14 +53,17 @@ function App() {
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [availableTTSEngines, setAvailableTTSEngines] = useState(null);
   
-  // Profile Management
-  const [currentProfile, setCurrentProfile] = useState(null);
-  const [showProfileManager, setShowProfileManager] = useState(false);
-  
   // Part 1A Integration - Document Structure
   const [pdfStructure, setPdfStructure] = useState(null);
   const [isExtractingStructure, setIsExtractingStructure] = useState(false);
   const [currentSection, setCurrentSection] = useState(null);
+  
+  // History Panel State
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false);
+  
+  // Success message state
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   
   // Document Outline State
   const [showDocumentOutline, setShowDocumentOutline] = useState(false);
@@ -131,45 +132,10 @@ function App() {
     localStorage.removeItem('connectpdf-tutorial-completed');
   };
 
-  const handleOnboardingComplete = async (role, task) => {
+  const handleOnboardingComplete = (role, task) => {
     setUserProfile({ role, task });
     setShowOnboarding(false);
-    
-    // Create a profile from the onboarding data
-    try {
-      const profileName = role; // Use the role directly as profile name
-      const profileData = {
-        profile_name: profileName,
-        persona: role,
-        job_description: task
-      };
-      
-      const newProfile = await profileService.createProfile(profileData);
-      setCurrentProfile(newProfile);
-      console.log('Created profile from onboarding:', newProfile);
-    } catch (error) {
-      console.error('Failed to create profile from onboarding:', error);
-      // Continue with the old userProfile system as fallback
-    }
-    
     startBackgroundAnalysis();
-  };
-
-  const handleProfileChange = (profile) => {
-    setCurrentProfile(profile);
-    console.log('Profile changed to:', profile.profile_name);
-    
-    // Clear current recommendations to force re-analysis with new profile
-    setRecommendations([]);
-    setAnalyzedCollectionId(null);
-  };
-
-  const handleManageProfiles = () => {
-    setShowProfileManager(true);
-  };
-
-  const handleProfileSelect = (profile) => {
-    handleProfileChange(profile);
   };
 
   const startBackgroundAnalysis = () => {
@@ -211,13 +177,41 @@ function App() {
   };
 
   const handleCollectionDocumentSelect = async (document, collection) => {
-    // Add collection info to document
-    const documentWithCollection = {
+    console.log('🔍 Collection document selected:', document);
+    console.log('🔍 Document properties:', Object.keys(document));
+    
+    // Get the actual file from the global file map
+    let actualFile = null;
+    
+    if (document.fileId && window.collectionFileMap) {
+      actualFile = window.collectionFileMap.get(document.fileId);
+      console.log('� Retrieved file from memory:', actualFile?.name, actualFile?.type, actualFile?.size);
+    }
+    
+    // If no file found in memory and it's from history, try to get it from originalHistoryId
+    if (!actualFile && document.originalHistoryId) {
+      console.log('📥 Fetching document from history ID:', document.originalHistoryId);
+      try {
+        const blobUrl = await historyService.getDocumentBlobUrl(document.originalHistoryId);
+        const response = await fetch(blobUrl);
+        const blob = await response.blob();
+        actualFile = new File([blob], document.name, { type: 'application/pdf' });
+        console.log('✅ Document file recreated from history');
+      } catch (error) {
+        console.error('❌ Failed to recreate file from history:', error);
+      }
+    }
+    
+    // Create the document object with the proper file
+    const documentWithFile = {
       ...document,
+      file: actualFile,
       fromCollection: collection
     };
     
-    setCurrentDocument(documentWithCollection);
+    console.log('🔍 Final document with file:', documentWithFile.file?.name, documentWithFile.file?.type, documentWithFile.file?.size);
+    
+    setCurrentDocument(documentWithFile);
     
     // Show document outline when selecting a document from collection
     setShowDocumentOutline(true);
@@ -226,8 +220,8 @@ function App() {
     setPdfStructure(null);
     setCurrentSection(null);
     
-    // Extract document structure using Part 1A if it's a real document with a file
-    if (document && document.file) {
+    // Extract document structure using Part 1A if it's a real document with a file or URL
+    if (document && (document.file || document.url)) {
       await extractDocumentStructure(document);
     }
     
@@ -236,7 +230,7 @@ function App() {
   };
 
   const extractDocumentStructure = async (document) => {
-    if (!document.file) return;
+    if (!document.file && !document.url) return;
     
     try {
       setIsExtractingStructure(true);
@@ -257,8 +251,26 @@ function App() {
         }
       }
       
+      // Prepare file for extraction
+      let fileForExtraction = document.file;
+      
+      // If document is from history (has URL but no file), fetch it as blob and create File object
+      if (!document.file && document.url) {
+        console.log('📥 Fetching PDF from history URL for structure extraction...');
+        const response = await fetch(document.url);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch PDF: ${response.status}`);
+        }
+        const blob = await response.blob();
+        console.log('📦 Blob fetched - Size:', blob.size, 'Type:', blob.type);
+        fileForExtraction = new File([blob], document.name || 'document.pdf', { type: 'application/pdf' });
+        console.log('📄 File object created - Name:', fileForExtraction.name, 'Size:', fileForExtraction.size, 'Type:', fileForExtraction.type);
+      }
+      
       // Extract fresh structure using Part 1A
-      const structure = await part1aService.extractStructure(document.file);
+      console.log('🔍 File for extraction:', fileForExtraction);
+      console.log('🔍 File type:', fileForExtraction.type, 'Size:', fileForExtraction.size);
+      const structure = await part1aService.extractStructure(fileForExtraction);
       
       if (structure) {
         console.log('✅ Structure extracted:', structure);
@@ -307,9 +319,8 @@ function App() {
         const collectionFiles = activeCollection.documents.map(doc => doc.file);
         const result = await backendService.getRecommendations(
           collectionFiles,
-          currentProfile?.persona || userProfile.role || 'Researcher',
-          currentProfile?.job_description || userProfile.task || 'Analyze document content',
-          currentProfile?.id
+          userProfile.role || 'Researcher',
+          userProfile.task || 'Analyze document content'
         );
         
         // Handle new return format with session_id
@@ -350,9 +361,8 @@ function App() {
       try {
         const result = await backendService.getRecommendations(
           [document.file],
-          currentProfile?.persona || userProfile.role || 'Researcher',
-          currentProfile?.job_description || userProfile.task || 'Analyze document content',
-          currentProfile?.id
+          userProfile.role || 'Researcher',
+          userProfile.task || 'Analyze document content'
         );
         
         // Handle new return format with session_id
@@ -439,6 +449,22 @@ function App() {
     setActiveCollection(newCollection);
     setShowCollectionUploader(false);
     console.log(`Created collection "${name}" with ${files.length} documents`);
+    
+    // Also save to database in background (non-blocking)
+    saveCollectionToDatabase(name, files).catch(error => {
+      console.warn('Failed to save collection to database:', error);
+    });
+  };
+
+  // Save collection to database (background operation)
+  const saveCollectionToDatabase = async (name, files) => {
+    try {
+      console.log('💾 Saving collection to database in background...');
+      const result = await collectionService.createCollection(name, files);
+      console.log('✅ Collection saved to database:', result);
+    } catch (error) {
+      console.error('❌ Failed to save collection to database:', error);
+    }
   };
 
   const handleSelectCollection = (collection) => {
@@ -570,6 +596,15 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
+  // Initialize collections and global file map
+  useEffect(() => {
+    // Initialize global file map if it doesn't exist
+    if (!window.collectionFileMap) {
+      window.collectionFileMap = new Map();
+      console.log('📁 Initialized global file map for collections');
+    }
+  }, []);
+
   // Load available TTS engines on component mount
   useEffect(() => {
     const loadTTSEngines = async () => {
@@ -596,14 +631,45 @@ function App() {
 
   const handleLoadSession = (session) => {
     console.log('Loading session from history tab:', session);
-    // Here you can implement loading a session
-    // You could restore documents, recommendations, etc. from the session data
+    
+    // Handle loading a PDF from history
+    if (session.type === 'load_pdf' && session.document) {
+      console.log('Loading PDF from history:', session.document);
+      
+      // Set as current document
+      setCurrentDocument(session.document);
+      
+      // Show document outline
+      setShowDocumentOutline(true);
+      
+      // Clear previous analysis state
+      setRecommendations([]);
+      setHighlightedSections([]);
+      setPdfStructure(null);
+      setCurrentSection(null);
+      
+      // Close history panel
+      setShowHistoryPanel(false);
+      
+      return;
+    }
+    
+    // Handle regular session loading  
+    setShowHistoryPanel(false);
+    console.log('Selected collection:', session.name || session.id);
     
     // If the session has documents, you could restore them
     if (session.documents && session.documents.length > 0) {
       console.log('Session contains documents:', session.documents.map(d => d.filename));
       // Future enhancement: restore documents and analysis state
     }
+  };
+
+  // Helper function to format dates
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   // Document Outline handlers
@@ -631,13 +697,28 @@ function App() {
           <OnboardingModal onComplete={handleOnboardingComplete} />
         )}
 
+        {/* Success Message */}
+        {successMessage && (
+          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50">
+            <div className="bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg border border-green-500">
+              {successMessage}
+            </div>
+          </div>
+        )}
+
+        {/* Error Message */}
+        {errorMessage && (
+          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50">
+            <div className="bg-red-600 text-white px-6 py-3 rounded-lg shadow-lg border border-red-500">
+              {errorMessage}
+            </div>
+          </div>
+        )}
+
         <Navigation 
           userProfile={userProfile}
           isProcessing={isProcessing}
           onRestartTutorial={handleRestartTutorial}
-          currentProfile={currentProfile}
-          onProfileChange={setCurrentProfile}
-          onManageProfiles={() => setShowProfileManager(true)}
         />
 
         <div className="flex" style={{ height: 'calc(100vh - 80px)' }}>
@@ -693,7 +774,6 @@ function App() {
               isExtractingStructure={isExtractingStructure}
               currentSection={currentSection}
               userProfile={userProfile}
-              currentProfile={currentProfile}
             />
           </div>
         </div>
@@ -751,7 +831,6 @@ function App() {
             currentDocument={currentDocument}
             selectedSection={currentSection}
             userProfile={userProfile}
-            currentProfile={currentProfile}
             recommendations={recommendations}
             currentSessionId={currentSessionId}
           />
@@ -979,19 +1058,6 @@ function App() {
               </div>
             </div>
           </div>
-        )}
-
-        {/* Profile Manager Modal */}
-        {showProfileManager && (
-          <ProfileManager
-            isOpen={showProfileManager}
-            onClose={() => setShowProfileManager(false)}
-            onProfileSelect={(profile) => {
-              setCurrentProfile(profile);
-              setShowProfileManager(false);
-            }}
-            currentProfile={currentProfile}
-          />
         )}
 
       </div>

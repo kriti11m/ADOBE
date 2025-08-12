@@ -36,7 +36,7 @@ class BackendService {
   }
 
   // Get document recommendations (Part 1B)
-  async getRecommendations(files, persona = 'Researcher', job = 'Analyze document content') {
+  async getRecommendations(files, persona = 'Researcher', job = 'Analyze document content', profileId = null) {
     const formData = new FormData();
     
     // Append files
@@ -47,6 +47,11 @@ class BackendService {
     // Append form data
     formData.append('persona', persona);
     formData.append('job', job);
+    
+    // Append profile_id if provided
+    if (profileId) {
+      formData.append('profile_id', profileId);
+    }
     
     try {
       const response = await fetch(`${API_BASE_URL}/part1b/analyze`, {
