@@ -24,7 +24,7 @@ const DocumentOutline = ({
   };
 
   return (
-    <div className={`w-80 flex-shrink-0 border-r transition-colors duration-300 flex flex-col h-full ${
+    <div id="document-outline" className={`w-80 flex-shrink-0 border-r transition-colors duration-300 flex flex-col h-full ${
       isDarkMode 
         ? 'bg-gray-900 border-gray-700' 
         : 'bg-gray-50 border-gray-200'

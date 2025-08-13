@@ -147,47 +147,52 @@ const PDFUploader = ({ onDocumentsProcessed, userProfile }) => {
   };
 
   return (
-    <div className={`p-6 rounded-xl border ${
-      isDarkMode 
-        ? 'bg-gray-800 border-gray-600' 
-        : 'bg-white border-gray-200'
-    }`}>
-      <div className="mb-4">
-        <h3 className={`text-lg font-semibold mb-2 ${
-          isDarkMode ? 'text-white' : 'text-gray-900'
-        }`}>
-          Upload PDF Documents
-        </h3>
-        <p className={`text-sm ${
+    <div className="modern-card p-8">
+      <div className="mb-6">
+        <div className="flex items-center mb-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center mr-3">
+            <Upload className="w-5 h-5 text-white" />
+          </div>
+          <h3 className={`text-xl font-bold ${
+            isDarkMode ? 'text-white' : 'text-gray-900'
+          }`}>
+            Upload PDF Documents
+          </h3>
+        </div>
+        <p className={`text-sm leading-relaxed ${
           isDarkMode ? 'text-gray-400' : 'text-gray-600'
         }`}>
-          Upload your PDFs to build your document library for intelligent recommendations
+          Upload your PDFs to build your document library for intelligent recommendations and AI-powered analysis
         </p>
       </div>
 
       {/* File Upload Area */}
-      <div className="mb-4">
+      <div className="mb-6">
         <label
           htmlFor="pdf-upload"
-          className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
+          className={`flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-2xl cursor-pointer transition-all duration-300 group ${
             isDarkMode
-              ? 'border-gray-600 hover:bg-gray-700 hover:border-gray-500'
-              : 'border-gray-300 hover:bg-gray-50 hover:border-gray-400'
-          } ${isUploading ? 'pointer-events-none opacity-50' : ''}`}
+              ? 'border-gray-600 hover:bg-gray-700/30 hover:border-blue-500/50'
+              : 'border-gray-300 hover:bg-blue-50/30 hover:border-blue-400/50'
+          } ${isUploading ? 'pointer-events-none opacity-50' : 'hover:scale-[1.02]'}`}
         >
-          <div className="flex flex-col items-center justify-center pt-5 pb-6">
-            <Upload className={`w-8 h-8 mb-4 ${
-              isDarkMode ? 'text-gray-400' : 'text-gray-500'
-            }`} />
-            <p className={`mb-2 text-sm ${
-              isDarkMode ? 'text-gray-400' : 'text-gray-500'
+          <div className="flex flex-col items-center justify-center pt-6 pb-6">
+            <div className={`w-16 h-16 rounded-2xl mb-4 flex items-center justify-center transition-all group-hover:scale-110 ${
+              isDarkMode ? 'bg-gray-700/50' : 'bg-gray-100/50'
             }`}>
-              <span className="font-semibold">Click to upload</span> or drag and drop
+              <Upload className={`w-8 h-8 ${
+                isDarkMode ? 'text-gray-400 group-hover:text-blue-400' : 'text-gray-500 group-hover:text-blue-500'
+              } transition-colors`} />
+            </div>
+            <p className={`mb-2 text-base font-medium ${
+              isDarkMode ? 'text-gray-300' : 'text-gray-700'
+            }`}>
+              <span className="text-blue-500">Click to upload</span> or drag and drop
             </p>
-            <p className={`text-xs ${
-              isDarkMode ? 'text-gray-500' : 'text-gray-400'
+            <p className={`text-sm ${
+              isDarkMode ? 'text-gray-500' : 'text-gray-500'
             }`}>
-              PDF files only
+              PDF files only • Up to 10MB each
             </p>
           </div>
           <input

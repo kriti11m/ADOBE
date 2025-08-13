@@ -39,10 +39,10 @@ class HistoryService {
     }
   }
 
-  // Check if document was already analyzed
-  async isDocumentAnalyzed(filename) {
+  // Check if document was already analyzed (profile-specific)
+  async isDocumentAnalyzed(filename, profileId = null) {
     try {
-      const history = await this.getHistory(100, 0); // Get recent history
+      const history = await this.getHistory(100, 0, profileId); // Get recent history for profile
       
       if (!history.history) return false;
       
@@ -58,10 +58,10 @@ class HistoryService {
     }
   }
 
-  // Get cached results for a document
-  async getCachedResults(filename) {
+  // Get cached results for a document (profile-specific)
+  async getCachedResults(filename, profileId = null) {
     try {
-      const history = await this.getHistory(100, 0);
+      const history = await this.getHistory(100, 0, profileId);
       
       if (!history.history) return null;
       
@@ -95,10 +95,10 @@ class HistoryService {
     };
   }
 
-  // Get document analysis status for sidebar
-  async getDocumentStatuses(documents) {
+  // Get document analysis status for sidebar (profile-specific)
+  async getDocumentStatuses(documents, profileId = null) {
     try {
-      const history = await this.getHistory(200, 0); // Get more history for status check
+      const history = await this.getHistory(200, 0, profileId); // Get more history for status check
       
       if (!history.history) return documents;
       

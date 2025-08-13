@@ -12,7 +12,7 @@ const InteractiveTutorial = ({ onComplete }) => {
   const tutorialSteps = [
     {
       id: 'welcome',
-      title: 'Welcome to ConnectPDF!',
+      title: 'Welcome to Doc-a-doodle!',
       description: 'Your AI-powered PDF analysis companion. Let\'s take a quick tour of the amazing features that will transform how you work with documents.',
       target: null,
       position: 'center',
@@ -29,10 +29,28 @@ const InteractiveTutorial = ({ onComplete }) => {
       highlight: { enabled: true }
     },
     {
+      id: 'create-profile',
+      title: 'Create Your Profile',
+      description: 'Start your journey by creating a personalized profile! This helps us tailor the experience to your specific needs and role.',
+      target: 'create-profile-btn',
+      position: 'bottom',
+      arrow: ArrowDown,
+      highlight: { enabled: true }
+    },
+    {
       id: 'dark-mode',
       title: 'Dark Mode Toggle',
       description: 'Switch between light and dark themes for comfortable viewing in any lighting condition. Your eyes will thank you!',
       target: 'dark-mode-toggle',
+      position: 'bottom',
+      arrow: ArrowDown,
+      highlight: { enabled: true }
+    },
+    {
+      id: 'settings-menu',
+      title: 'Settings & Profile Management',
+      description: 'Access advanced settings and profile management options. Click here to restart the tutorial, toggle themes, or manage your existing profiles once you\'ve created them.',
+      target: 'settings-toggle',
       position: 'bottom',
       arrow: ArrowDown,
       highlight: { enabled: true }
@@ -68,9 +86,9 @@ const InteractiveTutorial = ({ onComplete }) => {
       id: 'document-outline',
       title: 'Document Outline Panel',
       description: 'When you select a document, the outline panel shows the document structure, sections, and allows easy navigation through your PDF.',
-      target: 'pdf-viewer',
-      position: 'left',
-      arrow: ArrowLeft,
+      target: 'document-outline-placeholder',
+      position: 'right',
+      arrow: ArrowRight,
       highlight: { enabled: true }
     },
     {
@@ -125,7 +143,7 @@ const InteractiveTutorial = ({ onComplete }) => {
   // Get the highlighted element's position
   useEffect(() => {
     const updateHighlight = () => {
-      if (currentStepData.target && currentStepData.highlight?.enabled) {
+      if (currentStepData.target) {
         const element = document.querySelector(`#${currentStepData.target}`);
         console.log(`Tutorial: Looking for #${currentStepData.target}`, element);
         if (element) {
@@ -138,6 +156,13 @@ const InteractiveTutorial = ({ onComplete }) => {
           };
           console.log(`Tutorial: Highlighting element #${currentStepData.target}`, highlightData);
           setHighlightedElement(highlightData);
+          
+          // Scroll element into view if needed
+          element.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center',
+            inline: 'nearest'
+          });
         } else {
           console.warn(`Tutorial: Element #${currentStepData.target} not found`);
           setHighlightedElement(null);
@@ -173,8 +198,22 @@ const InteractiveTutorial = ({ onComplete }) => {
 
   // Create overlay with blur and highlight
   const createOverlay = () => {
-    if (!highlightedElement) return null;
+    // For center-positioned steps (like welcome), show full-screen overlay
+    if (currentStepData.position === 'center' || !highlightedElement) {
+      return (
+        <div 
+          className="fixed inset-0 pointer-events-none z-40"
+          style={{
+            background: isDarkMode 
+              ? 'rgba(0, 0, 0, 0.85)' 
+              : 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(6px)'
+          }}
+        />
+      );
+    }
 
+    // For targeted steps, show spotlight overlay with improved contrast
     return (
       <div className="fixed inset-0 pointer-events-none z-40">
         {/* Top section - above highlighted element */}
@@ -184,11 +223,11 @@ const InteractiveTutorial = ({ onComplete }) => {
             top: 0,
             left: 0,
             right: 0,
-            height: `${highlightedElement.top - 8}px`,
+            height: `${highlightedElement.top - 12}px`,
             background: isDarkMode 
-              ? 'rgba(0, 0, 0, 0.8)' 
-              : 'rgba(0, 0, 0, 0.6)',
-            backdropFilter: 'blur(4px)'
+              ? 'rgba(0, 0, 0, 0.85)' 
+              : 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(6px)'
           }}
         />
         
@@ -196,14 +235,14 @@ const InteractiveTutorial = ({ onComplete }) => {
         <div 
           className="absolute"
           style={{
-            top: `${highlightedElement.top - 8}px`,
+            top: `${highlightedElement.top - 12}px`,
             left: 0,
-            width: `${highlightedElement.left - 8}px`,
-            height: `${highlightedElement.height + 16}px`,
+            width: `${highlightedElement.left - 12}px`,
+            height: `${highlightedElement.height + 24}px`,
             background: isDarkMode 
-              ? 'rgba(0, 0, 0, 0.8)' 
-              : 'rgba(0, 0, 0, 0.6)',
-            backdropFilter: 'blur(4px)'
+              ? 'rgba(0, 0, 0, 0.85)' 
+              : 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(6px)'
           }}
         />
         
@@ -211,14 +250,14 @@ const InteractiveTutorial = ({ onComplete }) => {
         <div 
           className="absolute"
           style={{
-            top: `${highlightedElement.top - 8}px`,
-            left: `${highlightedElement.left + highlightedElement.width + 8}px`,
+            top: `${highlightedElement.top - 12}px`,
+            left: `${highlightedElement.left + highlightedElement.width + 12}px`,
             right: 0,
-            height: `${highlightedElement.height + 16}px`,
+            height: `${highlightedElement.height + 24}px`,
             background: isDarkMode 
-              ? 'rgba(0, 0, 0, 0.8)' 
-              : 'rgba(0, 0, 0, 0.6)',
-            backdropFilter: 'blur(4px)'
+              ? 'rgba(0, 0, 0, 0.85)' 
+              : 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(6px)'
           }}
         />
         
@@ -226,28 +265,29 @@ const InteractiveTutorial = ({ onComplete }) => {
         <div 
           className="absolute"
           style={{
-            top: `${highlightedElement.top + highlightedElement.height + 8}px`,
+            top: `${highlightedElement.top + highlightedElement.height + 12}px`,
             left: 0,
             right: 0,
             bottom: 0,
             background: isDarkMode 
-              ? 'rgba(0, 0, 0, 0.8)' 
-              : 'rgba(0, 0, 0, 0.6)',
-            backdropFilter: 'blur(4px)'
+              ? 'rgba(0, 0, 0, 0.85)' 
+              : 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(6px)'
           }}
         />
         
         {/* Highlight border around the clear element */}
         <div
-          className="absolute rounded-lg tutorial-highlight border-3"
+          className="absolute rounded-lg tutorial-highlight"
           style={{
-            top: `${highlightedElement.top - 8}px`,
-            left: `${highlightedElement.left - 8}px`,
-            width: `${highlightedElement.width + 16}px`,
-            height: `${highlightedElement.height + 16}px`,
+            top: `${highlightedElement.top - 12}px`,
+            left: `${highlightedElement.left - 12}px`,
+            width: `${highlightedElement.width + 24}px`,
+            height: `${highlightedElement.height + 24}px`,
             border: '3px solid #3B82F6',
-            borderRadius: '8px',
-            zIndex: 43
+            borderRadius: '12px',
+            zIndex: 43,
+            boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.3)'
           }}
         />
         
@@ -255,11 +295,11 @@ const InteractiveTutorial = ({ onComplete }) => {
         <div
           className="absolute rounded-lg border-2 border-blue-400 tutorial-spotlight"
           style={{
-            top: `${highlightedElement.top - 12}px`,
-            left: `${highlightedElement.left - 12}px`,
-            width: `${highlightedElement.width + 24}px`,
-            height: `${highlightedElement.height + 24}px`,
-            opacity: 0.8,
+            top: `${highlightedElement.top - 16}px`,
+            left: `${highlightedElement.left - 16}px`,
+            width: `${highlightedElement.width + 32}px`,
+            height: `${highlightedElement.height + 32}px`,
+            opacity: 0.7,
             zIndex: 44
           }}
         />

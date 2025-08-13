@@ -3,48 +3,61 @@ import { Settings, Moon, Sun, HelpCircle, User, UserPlus } from 'lucide-react';
 import { useDarkMode } from '../App';
 
 const Navigation = ({ 
-  userProfile, 
   isProcessing, 
-  onRestartTutorial, 
-  currentProfile, 
-  onProfileChange, 
-  onManageProfiles 
+  currentSection, 
+  onToggleDarkMode, 
+  onOpenCollectionUploader,
+  onRestartTutorial,
+  onOpenSettings,
+  currentProfile,
+  onProfileChange,
+  onShowHomePage = () => {}, // Add this prop
+  userProfile,
+  onManageProfiles
 }) => {
   const { isDarkMode, toggleDarkMode } = useDarkMode();
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
 
   return (
-    <nav id="nav" className={`shadow-sm border-b transition-colors duration-300 ${
+    <nav id="nav" className={`glass border-b transition-all duration-300 backdrop-blur-lg ${
       isDarkMode 
-        ? 'bg-gray-800 border-gray-700 text-white' 
-        : 'bg-white border-gray-200 text-gray-900'
-    } px-6 py-4`}>
+        ? 'border-gray-800/50 text-white' 
+        : 'border-gray-200/50 text-gray-900'
+    } px-6 py-4 sticky top-0 z-50`}>
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">CP</span>
+        <div className="flex items-center space-x-6">
+          <button 
+            onClick={onShowHomePage}
+            className="flex items-center space-x-3 cursor-pointer hover:scale-105 transition-transform duration-300"
+          >
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+              <span className="text-white font-bold text-sm">DA</span>
             </div>
-            <h1 className="text-xl font-semibold">ConnectPDF</h1>
-          </div>
+            <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              Doc-a-doodle
+            </h1>
+          </button>
           
           {/* Processing Status */}
           {isProcessing && (
-            <div className={`flex items-center space-x-2 px-3 py-1 rounded-full ${
+            <div className={`flex items-center space-x-3 px-4 py-2 rounded-xl glass ${
               isDarkMode 
-                ? 'bg-blue-900/50 text-blue-300' 
-                : 'bg-blue-50 text-blue-700'
+                ? 'bg-blue-900/30 text-blue-300 border border-blue-800/30' 
+                : 'bg-blue-50/80 text-blue-700 border border-blue-200/50'
             }`}>
-              <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-              <span className="text-sm">Analyzing documents...</span>
+              <div className="relative">
+                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <div className="absolute inset-0 w-4 h-4 border border-blue-400/30 rounded-full"></div>
+              </div>
+              <span className="text-sm font-medium">Analyzing documents...</span>
             </div>
           )}
           
           {/* Offline Mode Badge */}
-          <div className={`hidden items-center space-x-2 px-3 py-1 rounded-full ${
+          <div className={`hidden items-center space-x-2 px-3 py-1 rounded-lg glass ${
             isDarkMode 
-              ? 'bg-gray-700 text-gray-300' 
-              : 'bg-gray-100 text-gray-600'
+              ? 'bg-gray-700/50 text-gray-300' 
+              : 'bg-gray-100/50 text-gray-600'
           }`}>
             <div className={`w-2 h-2 rounded-full ${
               isDarkMode ? 'bg-gray-400' : 'bg-gray-500'
@@ -56,108 +69,156 @@ const Navigation = ({
         <div className="flex items-center space-x-4">
           {/* Current Profile Display - Read-only */}
           {currentProfile && (
-            <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg ${
+            <div className={`flex items-center space-x-3 px-4 py-2.5 rounded-xl glass border ${
               isDarkMode 
-                ? 'bg-blue-900/30 text-blue-200' 
-                : 'bg-blue-50 text-blue-800'
+                ? 'bg-gradient-to-r from-blue-900/40 to-purple-900/40 text-blue-200 border-blue-800/30' 
+                : 'bg-gradient-to-r from-blue-50/80 to-purple-50/80 text-blue-800 border-blue-200/50'
             }`}>
-              <span className="text-lg">👤</span>
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                <span className="text-white text-sm font-medium">
+                  {currentProfile.profile_name.charAt(0).toUpperCase()}
+                </span>
+              </div>
               <div className="text-sm">
-                <div className="font-medium">{currentProfile.profile_name}</div>
-                <div className="text-xs opacity-80">{currentProfile.persona}</div>
+                <div className="font-semibold">{currentProfile.profile_name}</div>
+                <div className={`text-xs opacity-75 ${
+                  isDarkMode ? 'text-blue-300' : 'text-blue-600'
+                }`}>{currentProfile.persona}</div>
               </div>
             </div>
           )}
           
           {/* User Profile (Legacy - show only if no current profile) */}
           {!currentProfile && userProfile.role && (
-            <div className={`flex items-center space-x-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+            <div className={`flex items-center space-x-3 px-4 py-2 rounded-xl glass cursor-pointer transition-all duration-300 hover:scale-105 ${
               isDarkMode 
-                ? 'bg-blue-900/50 text-blue-300 hover:bg-blue-800/50' 
-                : 'bg-blue-50 text-blue-900 hover:bg-blue-100'
+                ? 'bg-blue-900/30 text-blue-300 hover:bg-blue-800/40 border border-blue-800/30' 
+                : 'bg-blue-50/80 text-blue-900 hover:bg-blue-100/80 border border-blue-200/50'
             }`}>
-              <span className="text-lg">👤</span>
+              <div className="w-8 h-8 bg-gradient-to-br from-gray-500 to-gray-600 rounded-lg flex items-center justify-center">
+                <span className="text-white text-sm">👤</span>
+              </div>
               <div className="text-sm">
-                <span className="font-medium">{userProfile.role}</span>
-                <span className={isDarkMode ? 'text-blue-300' : 'text-blue-700'}>: </span>
+                <span className="font-semibold">{userProfile.role}</span>
+                <span className={`mx-1 ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>:</span>
                 <span className={isDarkMode ? 'text-blue-300' : 'text-blue-700'}>{userProfile.task}</span>
               </div>
             </div>
           )}
           
-          {/* Tutorial Help Button - Remove since it's now in settings */}
+          {/* Create New Profile Button - Show when no profile exists */}
+          {!currentProfile && (
+            <button
+              id="create-profile-btn"
+              onClick={onManageProfiles}
+              className="btn-primary flex items-center space-x-2 px-4 py-2.5 rounded-xl font-medium focus-ring"
+              title="Create Your Profile"
+            >
+              <UserPlus className="w-5 h-5" />
+              <span className="text-sm font-medium">Create Profile</span>
+            </button>
+          )}
           
           {/* Dark Mode Toggle */}
           <button 
             id="dark-mode-toggle"
             onClick={toggleDarkMode}
-            className={`p-2 rounded-lg transition-colors ${
+            className={`p-3 rounded-xl glass transition-all duration-300 hover:scale-105 focus-ring ${
               isDarkMode 
-                ? 'text-yellow-400 hover:text-yellow-300 hover:bg-gray-700' 
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                ? 'text-yellow-400 hover:text-yellow-300 hover:bg-gray-700/50 border border-gray-700/50' 
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/50 border border-gray-200/50'
             }`}
             title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
           >
-            {isDarkMode ? <Sun className="w-6 h-6" /> : <Moon className="w-6 h-6" />}
+            {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
           
           {/* Settings */}
           <div className="relative">
             <button 
+              id="settings-toggle"
               onClick={() => setShowSettingsMenu(!showSettingsMenu)}
-              className={`p-2 rounded-lg transition-colors ${
+              className={`p-3 rounded-xl glass transition-all duration-300 hover:scale-105 focus-ring ${
                 isDarkMode 
-                  ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700' 
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700/50 border border-gray-700/50' 
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/50 border border-gray-200/50'
               }`}
               title="Settings"
             >
-              <Settings className="w-6 h-6" />
+              <Settings className="w-5 h-5" />
             </button>
             
             {/* Settings Dropdown */}
             {showSettingsMenu && (
-              <div className="absolute right-0 mt-2 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-50">
-                <div className="p-2">
-                  {/* Profile Management Section */}
-                  <div className="pb-2 mb-2 border-b border-gray-600">
-                    <div className="text-xs text-gray-400 px-2 py-1 mb-1">Profile Management</div>
-                    
-                    <button
-                      onClick={() => {
-                        setShowSettingsMenu(false);
-                        onManageProfiles();
-                      }}
-                      className="w-full text-left p-2 rounded-lg hover:bg-gray-700 text-white text-sm flex items-center gap-2"
-                    >
-                      <UserPlus className="w-4 h-4" />
-                      Create New Profile
-                    </button>
-                    
-                    <button
-                      onClick={() => {
-                        setShowSettingsMenu(false);
-                        onManageProfiles();
-                      }}
-                      className="w-full text-left p-2 rounded-lg hover:bg-gray-700 text-white text-sm flex items-center gap-2"
-                    >
-                      <User className="w-4 h-4" />
-                      Manage Profiles
-                    </button>
-                  </div>
+              <div className={`absolute right-0 mt-3 w-72 glass border rounded-2xl shadow-2xl z-50 overflow-hidden ${
+                isDarkMode 
+                  ? 'bg-gray-800/90 border-gray-700/50' 
+                  : 'bg-white/90 border-gray-200/50'
+              }`}>
+                <div className="p-3">
+                  {/* Profile Management Section - Only show if user has profiles */}
+                  {currentProfile && (
+                    <div className={`pb-3 mb-3 border-b ${
+                      isDarkMode ? 'border-gray-700/50' : 'border-gray-200/50'
+                    }`}>
+                      <div className={`text-xs font-semibold px-3 py-2 mb-2 ${
+                        isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
+                        Profile Management
+                      </div>
+                      
+                      <button
+                        id="manage-profiles-btn"
+                        onClick={() => {
+                          setShowSettingsMenu(false);
+                          onManageProfiles();
+                        }}
+                        className={`w-full text-left p-3 rounded-xl transition-all duration-200 text-sm flex items-center gap-3 group ${
+                          isDarkMode 
+                            ? 'hover:bg-gray-700/50 text-white' 
+                            : 'hover:bg-gray-100/50 text-gray-900'
+                        }`}
+                      >
+                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <User className="w-4 h-4 text-white" />
+                        </div>
+                        <div>
+                          <div className="font-medium">Manage Profiles</div>
+                          <div className={`text-xs ${
+                            isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                          }`}>Edit, switch, or create profiles</div>
+                        </div>
+                      </button>
+                    </div>
+                  )}
                   
                   {/* Other Settings */}
-                  <div className="text-xs text-gray-400 px-2 py-1 mb-1">General</div>
+                  <div className={`text-xs font-semibold px-3 py-2 mb-2 ${
+                    isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                    General
+                  </div>
                   
                   <button
                     onClick={() => {
                       setShowSettingsMenu(false);
                       onRestartTutorial();
                     }}
-                    className="w-full text-left p-2 rounded-lg hover:bg-gray-700 text-white text-sm flex items-center gap-2"
+                    className={`w-full text-left p-3 rounded-xl transition-all duration-200 text-sm flex items-center gap-3 group ${
+                      isDarkMode 
+                        ? 'hover:bg-gray-700/50 text-white' 
+                        : 'hover:bg-gray-100/50 text-gray-900'
+                    }`}
                   >
-                    <HelpCircle className="w-4 h-4" />
-                    Restart Tutorial
+                    <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <HelpCircle className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <div className="font-medium">Restart Tutorial</div>
+                      <div className={`text-xs ${
+                        isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                      }`}>Learn how to use the app</div>
+                    </div>
                   </button>
                   
                   <button
@@ -165,10 +226,25 @@ const Navigation = ({
                       setShowSettingsMenu(false);
                       toggleDarkMode();
                     }}
-                    className="w-full text-left p-2 rounded-lg hover:bg-gray-700 text-white text-sm flex items-center gap-2"
+                    className={`w-full text-left p-3 rounded-xl transition-all duration-200 text-sm flex items-center gap-3 group ${
+                      isDarkMode 
+                        ? 'hover:bg-gray-700/50 text-white' 
+                        : 'hover:bg-gray-100/50 text-gray-900'
+                    }`}
                   >
-                    {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                    {isDarkMode ? 'Light Mode' : 'Dark Mode'}
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform ${
+                      isDarkMode 
+                        ? 'bg-gradient-to-br from-yellow-500 to-orange-600' 
+                        : 'bg-gradient-to-br from-slate-700 to-slate-800'
+                    }`}>
+                      {isDarkMode ? <Sun className="w-4 h-4 text-white" /> : <Moon className="w-4 h-4 text-white" />}
+                    </div>
+                    <div>
+                      <div className="font-medium">{isDarkMode ? 'Light Mode' : 'Dark Mode'}</div>
+                      <div className={`text-xs ${
+                        isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                      }`}>Switch color theme</div>
+                    </div>
                   </button>
                 </div>
               </div>

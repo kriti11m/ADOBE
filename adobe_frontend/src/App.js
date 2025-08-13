@@ -1,4 +1,5 @@
 import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
+import HomePage from './components/HomePage';
 import InteractiveTutorial from './components/InteractiveTutorial';
 import OnboardingModal from './components/OnboardingModal';
 import Navigation from './components/Navigation';
@@ -10,11 +11,12 @@ import PDFUploader from './components/PDFUploader';
 import CollectionUploader from './components/CollectionUploader';
 import PodcastButton from './components/PodcastButton';
 import ProfileManager from './components/ProfileManager';
-import { Headphones } from 'lucide-react';
+import { Headphones, FileText } from 'lucide-react';
 import backendService from './services/backendService';
 import part1aService from './services/part1aService';
 import historyService from './services/historyService';
 import profileService from './services/profileService';
+import collectionService from './services/collectionService';
 
 // Create Dark Mode Context
 export const DarkModeContext = createContext();
@@ -28,12 +30,15 @@ export const useDarkMode = () => {
 };
 
 function App() {
-  // Check if user has seen tutorial before
-  const [showTutorial, setShowTutorial] = useState(() => {
-    // Show tutorial automatically on very first visit
-    const hasSeenTutorial = localStorage.getItem('connectpdf-tutorial-seen');
-    return !hasSeenTutorial; // Show tutorial if user has never seen it
+  // App state management
+  const [showHomePage, setShowHomePage] = useState(() => {
+    // Show home page on first visit
+    const hasSeenHomePage = localStorage.getItem('doc-a-doodle-home-seen');
+    return !hasSeenHomePage; // Show home page if user has never seen it
   });
+
+  // Check if user has seen tutorial before
+  const [showTutorial, setShowTutorial] = useState(false); // Will be triggered from home page
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [userProfile, setUserProfile] = useState({ role: '', task: '' });
   const [currentDocument, setCurrentDocument] = useState(null);
@@ -75,7 +80,7 @@ function App() {
     const loadDocumentStatuses = async () => {
       if (documents.length > 0) {
         try {
-          const documentsWithStatus = await historyService.getDocumentStatuses(documents);
+          const documentsWithStatus = await historyService.getDocumentStatuses(documents, currentProfile?.id);
           setDocuments(documentsWithStatus);
         } catch (error) {
           console.warn('Failed to load document statuses:', error);
@@ -84,7 +89,43 @@ function App() {
     };
 
     loadDocumentStatuses();
-  }, [documents.length]); // Only run when documents are added
+  }, [documents.length, currentProfile?.id]); // Re-run when profile changes
+
+  // Load collections when profile changes
+  useEffect(() => {
+    const loadCollections = async () => {
+      if (currentProfile?.id) {
+        try {
+          console.log(`🔍 Loading collections for profile: ${currentProfile.profile_name} (ID: ${currentProfile.id})`);
+          const response = await collectionService.getCollections(100, 0, currentProfile.id);
+          console.log('📡 Backend response:', response);
+          
+          if (response.collections) {
+            const frontendCollections = response.collections.map(col => {
+              console.log(`📚 Collection: ${col.name} (Profile ID: ${col.profile_id})`);
+              return collectionService.convertToFrontendFormat(col);
+            });
+            
+            // Clear all collections first to ensure we only show profile-specific ones
+            setCollections(frontendCollections);
+            console.log(`✅ Loaded ${frontendCollections.length} collections for profile ${currentProfile.profile_name}`);
+          } else {
+            setCollections([]);
+          }
+        } catch (error) {
+          console.error('Failed to load collections:', error);
+          // Clear collections on error to prevent showing wrong data
+          setCollections([]);
+        }
+      } else {
+        // Clear collections when no profile is selected
+        console.log('🧹 Clearing collections - no profile selected');
+        setCollections([]);
+      }
+    };
+
+    loadCollections();
+  }, [currentProfile?.id]);
 
   // Dark mode effect
   useEffect(() => {
@@ -114,21 +155,35 @@ function App() {
     }
   }, []);
 
+  const handleStartFromHomePage = () => {
+    setShowHomePage(false);
+    setShowTutorial(true);
+    // Mark home page as seen
+    localStorage.setItem('doc-a-doodle-home-seen', 'true');
+  };
+
+  const handleShowHomePage = () => {
+    // Reset all states to show home page
+    setShowHomePage(true);
+    setShowTutorial(false);
+    setShowOnboarding(false);
+  };
+
   const handleTutorialComplete = () => {
     setShowTutorial(false);
-    setShowOnboarding(true);
+    // Skip onboarding since we no longer need the persona selection
     // Mark tutorial as seen (first time experience completed)
-    localStorage.setItem('connectpdf-tutorial-seen', 'true');
+    localStorage.setItem('doc-a-doodle-tutorial-seen', 'true');
     // Also mark as completed for backwards compatibility
-    localStorage.setItem('connectpdf-tutorial-completed', 'true');
+    localStorage.setItem('doc-a-doodle-tutorial-completed', 'true');
   };
 
   const handleRestartTutorial = () => {
     setShowTutorial(true);
     setShowOnboarding(false);
     // Clear both tutorial flags to reset the experience
-    localStorage.removeItem('connectpdf-tutorial-seen');
-    localStorage.removeItem('connectpdf-tutorial-completed');
+    localStorage.removeItem('doc-a-doodle-tutorial-seen');
+    localStorage.removeItem('doc-a-doodle-tutorial-completed');
   };
 
   const handleOnboardingComplete = async (role, task) => {
@@ -242,12 +297,12 @@ function App() {
       setIsExtractingStructure(true);
       console.log(`📖 Extracting structure for: ${document.name}`);
       
-      // Check if document was already analyzed
-      const isAnalyzed = await historyService.isDocumentAnalyzed(document.name);
+      // Check if document was already analyzed (for current profile)
+      const isAnalyzed = await historyService.isDocumentAnalyzed(document.name, currentProfile?.id);
       
       if (isAnalyzed) {
         console.log(`📚 Document "${document.name}" was previously analyzed, checking for cached structure...`);
-        const cachedResults = await historyService.getCachedResults(document.name);
+        const cachedResults = await historyService.getCachedResults(document.name, currentProfile?.id);
         
         if (cachedResults && cachedResults.structure) {
           console.log('✅ Using cached structure from history');
@@ -419,26 +474,44 @@ function App() {
     }
   };
 
-  const handleCreateCollection = (name, files) => {
-    const newCollection = {
-      id: `collection-${Date.now()}`,
-      name,
-      documents: Array.from(files).map(file => ({
-        id: `${file.name}-${Date.now()}`,
-        name: file.name,
-        file: file,
-        status: 'ready',
-        timestamp: 'Just now',
-        tags: ['Collection']
-      })),
-      createdAt: new Date().toISOString(),
-      status: 'ready'
-    };
-    
-    setCollections(prev => [newCollection, ...prev]);
-    setActiveCollection(newCollection);
-    setShowCollectionUploader(false);
-    console.log(`Created collection "${name}" with ${files.length} documents`);
+  const handleCreateCollection = async (name, files) => {
+    try {
+      if (!currentProfile?.id) {
+        console.error('❌ Cannot create collection: No profile selected');
+        alert('Please select a profile before creating a collection.');
+        return;
+      }
+
+      console.log(`🔨 Creating collection "${name}" for profile: ${currentProfile.profile_name} (ID: ${currentProfile.id})`);
+
+      // Create collection in backend
+      const backendCollection = await collectionService.createCollection(
+        name, 
+        files, 
+        null, // description
+        currentProfile.id
+      );
+
+      console.log('✅ Backend collection created:', backendCollection);
+
+      // Convert to frontend format and add to state
+      const frontendCollection = collectionService.convertToFrontendFormat(backendCollection);
+      setCollections(prev => {
+        const newCollections = [frontendCollection, ...prev];
+        console.log('📚 Updated collections state:', newCollections.map(c => `${c.name} (Profile: ${c.profile_id || 'local'})`));
+        return newCollections;
+      });
+      setActiveCollection(frontendCollection);
+      setShowCollectionUploader(false);
+      
+      console.log(`✅ Created collection "${name}" with ${files.length} documents for profile ${currentProfile.profile_name}`);
+    } catch (error) {
+      console.error('❌ Failed to create collection:', error);
+      alert('Failed to create collection. Please try again.');
+      
+      // Don't fall back to local collections anymore - require backend
+      setShowCollectionUploader(false);
+    }
   };
 
   const handleSelectCollection = (collection) => {
@@ -623,22 +696,36 @@ function App() {
           ? 'bg-gray-900 text-white' 
           : 'bg-gray-50 text-gray-900'
       }`}>
-        {showTutorial && (
+        {/* Show Home Page first */}
+        {showHomePage && (
+          <HomePage 
+            onStartTutorial={handleStartFromHomePage}
+            isDarkMode={isDarkMode}
+          />
+        )}
+
+        {/* Show Tutorial after home page */}
+        {!showHomePage && showTutorial && (
           <InteractiveTutorial onComplete={handleTutorialComplete} />
         )}
 
-        {showOnboarding && (
+        {/* Show Onboarding if needed (legacy) */}
+        {!showHomePage && showOnboarding && (
           <OnboardingModal onComplete={handleOnboardingComplete} />
         )}
 
-        <Navigation 
-          userProfile={userProfile}
-          isProcessing={isProcessing}
-          onRestartTutorial={handleRestartTutorial}
-          currentProfile={currentProfile}
-          onProfileChange={setCurrentProfile}
-          onManageProfiles={() => setShowProfileManager(true)}
-        />
+        {/* Main App UI - Always show when not on home page (tutorial will overlay on top) */}
+        {!showHomePage && (
+          <>
+            <Navigation 
+              userProfile={userProfile}
+              isProcessing={isProcessing}
+              onRestartTutorial={handleRestartTutorial}
+              currentProfile={currentProfile}
+              onProfileChange={setCurrentProfile}
+              onManageProfiles={() => setShowProfileManager(true)}
+              onShowHomePage={handleShowHomePage}
+            />
 
         <div className="flex" style={{ height: 'calc(100vh - 80px)' }}>
           <DocumentSidebar 
@@ -658,7 +745,7 @@ function App() {
 
           <div className="flex-1 flex">
             {/* Document Outline Panel - shows when document is selected */}
-            {showDocumentOutline && currentDocument && (
+            {showDocumentOutline && currentDocument ? (
               <DocumentOutline
                 currentDocument={currentDocument}
                 pdfStructure={pdfStructure}
@@ -667,6 +754,31 @@ function App() {
                 onNavigateToSection={handleNavigateToSection}
                 onClose={handleCloseDocumentOutline}
               />
+            ) : (
+              // Placeholder for tutorial highlighting
+              <div 
+                id="document-outline-placeholder" 
+                className={`w-80 flex-shrink-0 border-r transition-colors duration-300 flex flex-col h-full ${
+                  isDarkMode 
+                    ? 'bg-gray-900/30 border-gray-700' 
+                    : 'bg-gray-50/30 border-gray-200'
+                } ${showTutorial ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+              >
+                <div className={`p-4 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                  <h3 className={`font-semibold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    Document Outline
+                  </h3>
+                  <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                    Select a document to view its structure
+                  </p>
+                </div>
+                <div className="flex-1 flex items-center justify-center">
+                  <div className={`text-center ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>
+                    <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">Outline appears here</p>
+                  </div>
+                </div>
+              </div>
             )}
 
             <div id="pdf-viewer" className="flex-1">
@@ -982,7 +1094,7 @@ function App() {
         )}
 
         {/* Profile Manager Modal */}
-        {showProfileManager && (
+        {!showHomePage && showProfileManager && (
           <ProfileManager
             isOpen={showProfileManager}
             onClose={() => setShowProfileManager(false)}
@@ -992,6 +1104,8 @@ function App() {
             }}
             currentProfile={currentProfile}
           />
+        )}
+            </>
         )}
 
       </div>

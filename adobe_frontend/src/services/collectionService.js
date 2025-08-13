@@ -2,12 +2,17 @@ const API_BASE_URL = 'http://localhost:8000';
 
 class CollectionService {
   // Create a new collection
-  async createCollection(name, files, description = null) {
+  async createCollection(name, files, description = null, profileId = null) {
     try {
       const formData = new FormData();
       formData.append('name', name);
       if (description) {
         formData.append('description', description);
+      }
+      
+      // Add profile_id if provided
+      if (profileId) {
+        formData.append('profile_id', profileId);
       }
       
       // Add all files to FormData
@@ -31,12 +36,15 @@ class CollectionService {
     }
   }
 
-  // Get all collections
-  async getCollections(limit = 100, offset = 0) {
+  // Get all collections (profile-specific)
+  async getCollections(limit = 100, offset = 0, profileId = null) {
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/collections/?limit=${limit}&offset=${offset}`
-      );
+      let url = `${API_BASE_URL}/collections/?limit=${limit}&offset=${offset}`;
+      if (profileId) {
+        url += `&profile_id=${profileId}`;
+      }
+      
+      const response = await fetch(url);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
