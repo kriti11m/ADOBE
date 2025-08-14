@@ -3,7 +3,7 @@ import os
 import shutil
 from datetime import datetime
 from typing import List, Dict, Any
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -15,10 +15,10 @@ router = APIRouter(prefix="/collections", tags=["PDF Collections"])
 
 @router.post("/create")
 async def create_collection(
-    name: str,
+    name: str = Form(...),
     files: List[UploadFile] = File(...),
-    description: str = None,
-    profile_id: int = None,
+    description: str = Form(None),
+    profile_id: int = Form(None),
     db: Session = Depends(get_db)
 ):
     """
@@ -49,7 +49,7 @@ async def create_collection(
         db.flush()  # Get the ID without committing
         
         collection_documents = []
-        collection_dir = f"data/collections/{new_collection.id}"
+        collection_dir = os.path.abspath(f"data/collections/{new_collection.id}")
         os.makedirs(collection_dir, exist_ok=True)
         
         for file in files:
@@ -61,15 +61,31 @@ async def create_collection(
             file_content = await file.read()
             file_hash = hashlib.sha256(file_content).hexdigest()
             
+            print(f"📄 Processing file: {file.filename}")
+            print(f"📁 Target collection directory: {collection_dir}")
+            
             # Check if document already exists
             existing_doc = db.query(PDFDocument).filter(PDFDocument.file_hash == file_hash).first()
             
             if existing_doc:
-                # Use existing document
+                print(f"🔍 Found existing document with same hash: {existing_doc.file_path}")
+                # Use existing document but update its path to the collection directory
+                permanent_file_path = os.path.join(collection_dir, file.filename)
+                
+                # If the existing document has a temp path or the file doesn't exist, save to permanent location
+                if not existing_doc.file_path or not os.path.exists(existing_doc.file_path) or 'temp' in existing_doc.file_path.lower():
+                    print(f"💾 Saving file to permanent location: {permanent_file_path}")
+                    with open(permanent_file_path, 'wb') as f:
+                        f.write(file_content)
+                    existing_doc.file_path = permanent_file_path
+                    db.flush()
+                    print(f"✅ Updated existing document path to: {permanent_file_path}")
+                
                 document = existing_doc
             else:
-                # Save file to disk
+                # Save file to disk in permanent location
                 file_path = os.path.join(collection_dir, file.filename)
+                print(f"💾 Creating new document at: {file_path}")
                 with open(file_path, 'wb') as f:
                     f.write(file_content)
                 
@@ -82,6 +98,7 @@ async def create_collection(
                 )
                 db.add(document)
                 db.flush()
+                print(f"✅ Created new document: {file_path}")
             
             # Add document to collection
             new_collection.documents.append(document)

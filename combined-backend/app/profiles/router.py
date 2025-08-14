@@ -9,19 +9,16 @@ router = APIRouter(prefix="/profiles", tags=["User Profiles"])
 
 class ProfileCreate(BaseModel):
     profile_name: str
-    persona: str
-    job_description: str
+    description: Optional[str] = None
 
 class ProfileUpdate(BaseModel):
     profile_name: Optional[str] = None
-    persona: Optional[str] = None
-    job_description: Optional[str] = None
+    description: Optional[str] = None
 
 class ProfileResponse(BaseModel):
     id: int
     profile_name: str
-    persona: str
-    job_description: str
+    description: Optional[str] = None
     is_default: bool
     is_active: bool
     created_at: str
@@ -46,8 +43,7 @@ async def create_profile(
         
         profile = profile_service.create_profile(
             profile_name=profile_data.profile_name,
-            persona=profile_data.persona,
-            job_description=profile_data.job_description
+            description=profile_data.description
         )
         
         return {
@@ -144,8 +140,7 @@ async def update_profile(
         profile = profile_service.update_profile(
             profile_id=profile_id,
             profile_name=profile_data.profile_name,
-            persona=profile_data.persona,
-            job_description=profile_data.job_description
+            description=profile_data.description
         )
         
         if not profile:
@@ -210,46 +205,4 @@ async def get_profile_stats(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching profile stats: {str(e)}")
 
-@router.get("/{profile_id}/history", response_model=Dict[str, Any])
-async def get_profile_history(
-    profile_id: int,
-    limit: int = Query(50, ge=1, le=100),
-    offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db)
-):
-    """Get analysis history for a specific profile"""
-    try:
-        from ..services.history_service import HistoryService
-        
-        profile_service = ProfileService(db)
-        profile = profile_service.get_profile_by_id(profile_id)
-        
-        if not profile:
-            raise HTTPException(status_code=404, detail="Profile not found")
-        
-        history_service = HistoryService(db)
-        history = history_service.get_profile_analysis_history(
-            profile_id=profile_id,
-            limit=limit,
-            offset=offset
-        )
-        
-        return {
-            "profile": {
-                "id": profile.id,
-                "profile_name": profile.profile_name,
-                "persona": profile.persona,
-                "job_description": profile.job_description
-            },
-            "history": history,
-            "pagination": {
-                "limit": limit,
-                "offset": offset,
-                "total": len(history)
-            }
-        }
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching profile history: {str(e)}")
+# History endpoint removed - no longer tracking analysis sessions

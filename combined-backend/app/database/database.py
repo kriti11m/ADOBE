@@ -7,8 +7,8 @@ from pathlib import Path
 DB_DIR = Path("data")
 DB_DIR.mkdir(exist_ok=True)
 
-# Database URL
-DATABASE_URL = f"sqlite:///{DB_DIR}/pdf_history.db"
+# Database URL for profile-based collections
+DATABASE_URL = f"sqlite:///{DB_DIR}/pdf_collections.db"
 
 # Create engine
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})

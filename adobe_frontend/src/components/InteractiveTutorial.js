@@ -2,7 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ArrowRight, ArrowDown, ArrowLeft, ArrowUp, SkipForward, Check } from 'lucide-react';
 import { useDarkMode } from '../App';
 
-const InteractiveTutorial = ({ onComplete }) => {
+const InteractiveTutorial = ({ 
+  onComplete, 
+  onShowSidebar, 
+  onShowUploader, 
+  onHighlightRightSidebar 
+}) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
   const [highlightedElement, setHighlightedElement] = useState(null);
@@ -17,7 +22,8 @@ const InteractiveTutorial = ({ onComplete }) => {
       target: null,
       position: 'center',
       arrow: null,
-      highlight: null
+      highlight: null,
+      action: null
     },
     {
       id: 'navigation',
@@ -26,7 +32,8 @@ const InteractiveTutorial = ({ onComplete }) => {
       target: 'nav',
       position: 'bottom',
       arrow: ArrowDown,
-      highlight: { enabled: true }
+      highlight: { enabled: true },
+      action: null
     },
     {
       id: 'create-profile',
@@ -35,7 +42,8 @@ const InteractiveTutorial = ({ onComplete }) => {
       target: 'create-profile-btn',
       position: 'bottom',
       arrow: ArrowDown,
-      highlight: { enabled: true }
+      highlight: { enabled: true },
+      action: null
     },
     {
       id: 'dark-mode',
@@ -44,7 +52,8 @@ const InteractiveTutorial = ({ onComplete }) => {
       target: 'dark-mode-toggle',
       position: 'bottom',
       arrow: ArrowDown,
-      highlight: { enabled: true }
+      highlight: { enabled: true },
+      action: null
     },
     {
       id: 'settings-menu',
@@ -53,7 +62,8 @@ const InteractiveTutorial = ({ onComplete }) => {
       target: 'settings-toggle',
       position: 'bottom',
       arrow: ArrowDown,
-      highlight: { enabled: true }
+      highlight: { enabled: true },
+      action: null
     },
     {
       id: 'document-sidebar',
@@ -62,7 +72,8 @@ const InteractiveTutorial = ({ onComplete }) => {
       target: 'document-sidebar',
       position: 'right',
       arrow: ArrowRight,
-      highlight: { enabled: true }
+      highlight: { enabled: true },
+      action: { type: 'showSidebar', value: 'documents' }
     },
     {
       id: 'collections',
@@ -71,16 +82,8 @@ const InteractiveTutorial = ({ onComplete }) => {
       target: 'collections-tab',
       position: 'right',
       arrow: ArrowRight,
-      highlight: { enabled: true }
-    },
-    {
-      id: 'history-tab',
-      title: 'Analysis History Tab',
-      description: 'Access your complete analysis history through the History tab in the sidebar. View past sessions, collections, and all analyzed documents with timestamps.',
-      target: 'history-tab',
-      position: 'right',
-      arrow: ArrowRight,
-      highlight: { enabled: true }
+      highlight: { enabled: true },
+      action: { type: 'showSidebar', value: 'collections' }
     },
     {
       id: 'document-outline',
@@ -89,7 +92,8 @@ const InteractiveTutorial = ({ onComplete }) => {
       target: 'document-outline-placeholder',
       position: 'right',
       arrow: ArrowRight,
-      highlight: { enabled: true }
+      highlight: { enabled: true },
+      action: null
     },
     {
       id: 'upload-pdf',
@@ -98,7 +102,8 @@ const InteractiveTutorial = ({ onComplete }) => {
       target: 'upload-documents',
       position: 'right',
       arrow: ArrowRight,
-      highlight: { enabled: true }
+      highlight: { enabled: true },
+      action: { type: 'showUploader' }
     },
     {
       id: 'smart-connections',
@@ -107,25 +112,28 @@ const InteractiveTutorial = ({ onComplete }) => {
       target: 'smart-connections',
       position: 'left',
       arrow: ArrowLeft,
-      highlight: { enabled: true }
+      highlight: { enabled: true },
+      action: { type: 'highlightRightSidebar', component: 'smart-connections' }
     },
     {
       id: 'insights',
       title: 'AI-Powered Insights',
       description: 'Generate intelligent insights, recommendations, and analysis from your documents. Get deep understanding with AI assistance.',
-      target: 'smart-connections',
+      target: 'ai-assistant',
       position: 'left',
       arrow: ArrowLeft,
-      highlight: { enabled: true }
+      highlight: { enabled: true },
+      action: { type: 'highlightRightSidebar', component: 'ai-assistant' }
     },
     {
-      id: 'podcast-button',
+      id: 'podcast-mode',
       title: 'Podcast Mode',
       description: 'Transform your document analysis into engaging 2-5 minute audio summaries. Perfect for learning on the go!',
-      target: 'podcast-button',
-      position: 'top',
-      arrow: ArrowUp,
-      highlight: { enabled: true }
+      target: 'podcast-mode',
+      position: 'left',
+      arrow: ArrowLeft,
+      highlight: { enabled: true },
+      action: { type: 'highlightRightSidebar', component: 'podcast-mode' }
     },
     {
       id: 'completion',
@@ -134,13 +142,14 @@ const InteractiveTutorial = ({ onComplete }) => {
       target: null,
       position: 'center',
       arrow: null,
-      highlight: null
+      highlight: null,
+      action: null
     }
   ];
 
   const currentStepData = tutorialSteps[currentStep];
 
-  // Get the highlighted element's position
+  // Get the highlighted element's position and handle step actions
   useEffect(() => {
     const updateHighlight = () => {
       if (currentStepData.target) {
@@ -172,10 +181,41 @@ const InteractiveTutorial = ({ onComplete }) => {
       }
     };
 
+    // Handle step actions
+    const handleStepAction = () => {
+      if (currentStepData.action) {
+        const { type, value, component } = currentStepData.action;
+        
+        switch (type) {
+          case 'showSidebar':
+            if (onShowSidebar) {
+              onShowSidebar(value);
+            }
+            break;
+          case 'showUploader':
+            if (onShowUploader) {
+              onShowUploader(true);
+            }
+            break;
+          case 'highlightRightSidebar':
+            if (onHighlightRightSidebar) {
+              onHighlightRightSidebar(component);
+            }
+            break;
+          default:
+            break;
+        }
+      }
+    };
+
     // Add a small delay to ensure DOM is updated
-    const timer = setTimeout(updateHighlight, 200);
+    const timer = setTimeout(() => {
+      updateHighlight();
+      handleStepAction();
+    }, 200);
+    
     return () => clearTimeout(timer);
-  }, [currentStep, currentStepData]);
+  }, [currentStep, currentStepData, onShowSidebar, onShowUploader, onHighlightRightSidebar]);
 
   const handleNext = () => {
     if (currentStep < tutorialSteps.length - 1) {

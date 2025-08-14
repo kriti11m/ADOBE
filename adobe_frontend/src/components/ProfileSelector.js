@@ -46,9 +46,11 @@ const ProfileSelector = ({ currentProfile, onProfileChange, onManageProfiles }) 
           <div className="text-sm font-medium text-gray-800">
             {currentProfile?.profile_name || 'Select Profile'}
           </div>
-          <div className="text-xs text-blue-600">
-            {currentProfile?.job_description || 'Choose your persona'}
-          </div>
+          {currentProfile?.description && (
+            <div className="text-xs text-blue-600">
+              {currentProfile.description}
+            </div>
+          )}
         </div>
         <div className="text-gray-400 ml-2">
           {showDropdown ? '▲' : '▼'}
@@ -83,15 +85,14 @@ const ProfileSelector = ({ currentProfile, onProfileChange, onManageProfiles }) 
                         <div className="text-xs text-blue-600">✓</div>
                       )}
                     </div>
-                    <div className="text-xs text-gray-600 mb-1">
-                      👤 {profile.persona}
-                    </div>
-                    <div className="text-xs text-blue-600">
-                      {profile.job_description.length > 80 
-                        ? `${profile.job_description.substring(0, 80)}...`
-                        : profile.job_description
-                      }
-                    </div>
+                    {profile.description && (
+                      <div className="text-xs text-blue-600">
+                        {profile.description.length > 100 
+                          ? `${profile.description.substring(0, 100)}...`
+                          : profile.description
+                        }
+                      </div>
+                    )}
                   </button>
                 ))
               )}

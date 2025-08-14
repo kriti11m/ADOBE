@@ -11,7 +11,8 @@ from fastapi.responses import JSONResponse
 from .pipeline import DocumentAnalysisPipeline
 from sqlalchemy.orm import Session
 from ..database.database import get_db
-from ..services.history_service import HistoryService
+from ..database.models import PDFDocument
+# history_service removed
 
 router = APIRouter(prefix="/part1b", tags=["Document Analysis"])
 
@@ -50,11 +51,9 @@ async def analyze_documents(
     temp_file_paths = []
     
     try:
-        # Initialize history service
-        history_service = HistoryService(db)
-        stored_documents = []
+        # History service removed - no longer storing documents
         
-        # Save uploaded files and store in database
+        # Save uploaded files temporarily for processing
         for file in pdf_files:
             temp_file_path = os.path.join(temp_dir, file.filename)
             temp_file_paths.append(temp_file_path)
@@ -62,14 +61,6 @@ async def analyze_documents(
             with open(temp_file_path, "wb") as temp_file:
                 content = await file.read()
                 temp_file.write(content)
-                
-                # Store document in database
-                pdf_doc = history_service.store_pdf_document(
-                    filename=file.filename,
-                    file_content=content,
-                    file_path=temp_file_path
-                )
-                stored_documents.append(pdf_doc)
 
         # Process documents
         start_time = time.time()
@@ -80,29 +71,10 @@ async def analyze_documents(
             job=job
         )
         processing_time = time.time() - start_time
-        
-        # Create analysis session in database
-        session = history_service.create_analysis_session(
-            persona=persona,
-            job_description=job,
-            pdf_documents=stored_documents,
-            processing_time=processing_time,
-            profile_id=profile_id
-        )
-        
-        # Store extracted sections and add session ID if session was created
-        if session:
-            if 'extracted_sections' in result:
-                history_service.store_extracted_sections(
-                    session_id=session.id,
-                    sections=result['extracted_sections']
-                )
-            # Add session ID to result
-            result['session_id'] = session.id
-        else:
-            # No session created because no profile provided
-            result['session_id'] = None
-            result['warning'] = 'Analysis completed but session not saved - profile required for history tracking'
+
+        # History service removed - no longer creating sessions or storing sections
+        # Return processing results without session tracking
+        result['processing_time'] = processing_time
         
         return result
         
@@ -141,6 +113,85 @@ async def analyze_single_document(
         Dict containing analysis results
     """
     return await analyze_documents(persona=persona, job=job, profile_id=profile_id, files=[file])
+
+@router.post("/analyze-collection")
+async def analyze_collection(
+    collection_id: int = Form(...),
+    persona: str = Form("Researcher"),
+    job: str = Form("Analyze document content and extract relevant sections"),
+    profile_id: int = Form(None),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Analyze all documents in a collection by collection ID
+    NOTE: Collections functionality removed - this endpoint is deprecated
+    """
+    raise HTTPException(status_code=501, detail="Collections functionality has been removed. Use individual document analysis instead.")
+    for doc in documents:
+        file_path = doc.file_path
+        
+        # Check if file exists at stored path
+        if not os.path.exists(file_path):
+            # Try to find the file in collections directory (same logic as blob endpoint)
+            collections_path = os.path.abspath("data/collections")
+            found_file = None
+            
+            if os.path.exists(collections_path):
+                for root, dirs, files in os.walk(collections_path):
+                    # Try exact filename match first
+                    if doc.filename in files:
+                        potential_path = os.path.join(root, doc.filename)
+                        if os.path.exists(potential_path):
+                            found_file = potential_path
+                            print(f"🔍 Found file in collections: {found_file}")
+                            # Update the database with the correct path
+                            doc.file_path = found_file
+                            db.commit()
+                            file_path = found_file
+                            break
+                    
+                    # If exact match not found, try partial matches
+                    if not found_file:
+                        for file in files:
+                            if os.path.basename(doc.filename) == file:
+                                potential_path = os.path.join(root, file)
+                                if os.path.exists(potential_path):
+                                    found_file = potential_path
+                                    print(f"🔍 Found file by basename in collections: {found_file}")
+                                    doc.file_path = found_file
+                                    db.commit()
+                                    file_path = found_file
+                                    break
+                        if found_file:
+                            break
+            
+            # If still not found, raise error
+            if not found_file:
+                raise HTTPException(status_code=404, detail=f"Document file not found: {doc.file_path}")
+        
+        pdf_paths.append(file_path)
+    
+    try:
+        # Initialize pipeline
+        pipeline = DocumentAnalysisPipeline()
+        
+        # Process documents with the provided pipeline
+        results = pipeline.process_documents(pdf_paths, persona, job)
+        
+        # History service removed - no longer storing sessions
+        # Return results without session tracking
+        return {
+            "collection_id": collection_id,
+            "collection_name": collection.name,
+            "document_count": len(documents),
+            "extracted_sections": results.get("extracted_sections", []),
+            "processing_time": results.get("processing_time", 0),
+            "recommendations": results.get("extracted_sections", [])  # For backward compatibility
+        }
+        
+    except Exception as e:
+        print(f"Error in collection analysis: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 @router.get("/health")
 async def health_check():

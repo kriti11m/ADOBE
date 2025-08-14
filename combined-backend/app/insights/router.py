@@ -17,8 +17,8 @@ from pydantic import BaseModel
 
 from sqlalchemy.orm import Session
 from ..database.database import get_db
-from ..database.models import ExtractedSection, AnalysisSession
-from ..services.history_service import HistoryService
+# history models removed: ExtractedSection, AnalysisSession
+# history_service removed
 from ..services.tts_service import tts_service
 
 from .gemini_generator import GeminiInsightsGenerator

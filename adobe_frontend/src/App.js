@@ -6,17 +6,13 @@ import Navigation from './components/Navigation';
 import DocumentSidebar from './components/DocumentSidebar';
 import DocumentOutline from './components/DocumentOutline';
 import FinalAdobePDFViewer from './components/FinalAdobePDFViewer';
-import SmartConnections from './components/SmartConnections';
+import RightSidebar from './components/RightSidebar';
 import PDFUploader from './components/PDFUploader';
 import CollectionUploader from './components/CollectionUploader';
-import PodcastButton from './components/PodcastButton';
-import ProfileManager from './components/ProfileManager';
 import { Headphones, FileText } from 'lucide-react';
 import backendService from './services/backendService';
 import part1aService from './services/part1aService';
-import historyService from './services/historyService';
-import profileService from './services/profileService';
-import collectionService from './services/collectionService';
+import documentService from './services/documentService';
 
 // Create Dark Mode Context
 export const DarkModeContext = createContext();
@@ -60,10 +56,6 @@ function App() {
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [availableTTSEngines, setAvailableTTSEngines] = useState(null);
   
-  // Profile Management
-  const [currentProfile, setCurrentProfile] = useState(null);
-  const [showProfileManager, setShowProfileManager] = useState(false);
-  
   // Part 1A Integration - Document Structure
   const [pdfStructure, setPdfStructure] = useState(null);
   const [isExtractingStructure, setIsExtractingStructure] = useState(false);
@@ -75,57 +67,54 @@ function App() {
   // Ref for PDF viewer to control navigation
   const pdfViewerRef = useRef(null);
 
-  // Load document statuses from history on app start
-  useEffect(() => {
-    const loadDocumentStatuses = async () => {
-      if (documents.length > 0) {
-        try {
-          const documentsWithStatus = await historyService.getDocumentStatuses(documents, currentProfile?.id);
-          setDocuments(documentsWithStatus);
-        } catch (error) {
-          console.warn('Failed to load document statuses:', error);
-        }
-      }
-    };
+  // Tutorial state management
+  const [tutorialSidebarTab, setTutorialSidebarTab] = useState(null);
+  const [tutorialHighlightedComponent, setTutorialHighlightedComponent] = useState(null);
 
-    loadDocumentStatuses();
-  }, [documents.length, currentProfile?.id]); // Re-run when profile changes
+  // history functionality removed
 
-  // Load collections when profile changes
+  // Load documents on app start
   useEffect(() => {
-    const loadCollections = async () => {
-      if (currentProfile?.id) {
-        try {
-          console.log(`🔍 Loading collections for profile: ${currentProfile.profile_name} (ID: ${currentProfile.id})`);
-          const response = await collectionService.getCollections(100, 0, currentProfile.id);
-          console.log('📡 Backend response:', response);
-          
-          if (response.collections) {
-            const frontendCollections = response.collections.map(col => {
-              console.log(`📚 Collection: ${col.name} (Profile ID: ${col.profile_id})`);
-              return collectionService.convertToFrontendFormat(col);
-            });
-            
-            // Clear all collections first to ensure we only show profile-specific ones
-            setCollections(frontendCollections);
-            console.log(`✅ Loaded ${frontendCollections.length} collections for profile ${currentProfile.profile_name}`);
-          } else {
-            setCollections([]);
-          }
-        } catch (error) {
-          console.error('Failed to load collections:', error);
-          // Clear collections on error to prevent showing wrong data
-          setCollections([]);
-        }
-      } else {
-        // Clear collections when no profile is selected
-        console.log('🧹 Clearing collections - no profile selected');
+    const loadDocuments = async () => {
+      try {
+        console.log('🔍 Loading documents...');
+        const backendDocuments = await documentService.getAllDocuments();
+        console.log('� Documents loaded:', documents);
+        
+        // Convert to format expected by Documents tab
+        const frontendDocuments = backendDocuments.map(doc => ({
+          id: doc.id,
+          name: doc.original_filename,
+          status: 'uploaded',
+          timestamp: new Date(doc.upload_timestamp).toLocaleDateString(),
+          tags: ['PDF', 'Backend'],
+          dbDocumentId: doc.id
+        }));
+        
+        // For compatibility with existing UI, convert to collections format
+        const documentCollections = backendDocuments.map(doc => ({
+          id: doc.id,
+          title: doc.title || doc.original_filename,
+          filename: doc.original_filename,
+          uploadDate: doc.upload_timestamp,
+          tags: ['PDF'],
+          isUploaded: true,
+          documents: [doc]
+        }));
+        
+        // Set both arrays
+        setDocuments(frontendDocuments);
+        setCollections(documentCollections);
+        console.log(`✅ Loaded ${backendDocuments.length} documents`);
+      } catch (error) {
+        console.error('Failed to load documents:', error);
+        setDocuments([]);
         setCollections([]);
       }
     };
 
-    loadCollections();
-  }, [currentProfile?.id]);
+    loadDocuments();
+  }, []);
 
   // Dark mode effect
   useEffect(() => {
@@ -186,45 +175,32 @@ function App() {
     localStorage.removeItem('doc-a-doodle-tutorial-completed');
   };
 
-  const handleOnboardingComplete = async (role, task) => {
-    setUserProfile({ role, task });
+  // Tutorial interaction handlers
+  const handleTutorialShowSidebar = (tabType) => {
+    setTutorialSidebarTab(tabType);
+    console.log(`Tutorial: Showing sidebar tab: ${tabType}`);
+  };
+
+  const handleTutorialShowUploader = (show) => {
+    setShowUploader(show);
+    console.log(`Tutorial: Showing uploader: ${show}`);
+  };
+
+  const handleTutorialHighlightRightSidebar = (component) => {
+    setTutorialHighlightedComponent(component);
+    console.log(`Tutorial: Highlighting right sidebar component: ${component}`);
+    // Clear highlight after a few seconds
+    setTimeout(() => {
+      setTutorialHighlightedComponent(null);
+    }, 5000);
+  };
+
+  const handleOnboardingComplete = (userProfile) => {
     setShowOnboarding(false);
-    
-    // Create a profile from the onboarding data
-    try {
-      const profileName = role; // Use the role directly as profile name
-      const profileData = {
-        profile_name: profileName,
-        persona: role,
-        job_description: task
-      };
-      
-      const newProfile = await profileService.createProfile(profileData);
-      setCurrentProfile(newProfile);
-      console.log('Created profile from onboarding:', newProfile);
-    } catch (error) {
-      console.error('Failed to create profile from onboarding:', error);
-      // Continue with the old userProfile system as fallback
-    }
+    setUserProfile(userProfile);
+    console.log('Onboarding completed:', userProfile);
     
     startBackgroundAnalysis();
-  };
-
-  const handleProfileChange = (profile) => {
-    setCurrentProfile(profile);
-    console.log('Profile changed to:', profile.profile_name);
-    
-    // Clear current recommendations to force re-analysis with new profile
-    setRecommendations([]);
-    setAnalyzedCollectionId(null);
-  };
-
-  const handleManageProfiles = () => {
-    setShowProfileManager(true);
-  };
-
-  const handleProfileSelect = (profile) => {
-    handleProfileChange(profile);
   };
 
   const startBackgroundAnalysis = () => {
@@ -240,8 +216,8 @@ function App() {
   const handleDocumentSelect = async (document) => {
     setCurrentDocument(document);
     
-    // Show document outline when selecting a document
-    setShowDocumentOutline(true);
+    // Don't auto-open document outline on selection - only open after Part 1A completes
+    // setShowDocumentOutline(true); // Removed - will be set when structure extraction completes
     
     // If document is from a collection, ensure it's extracted properly
     if (document.fromCollection) {
@@ -257,6 +233,12 @@ function App() {
       try {
         const structure = await part1aService.extractStructure(document.file || document);
         setPdfStructure(structure);
+        
+        // Auto-open document outline when structure extraction completes
+        if (structure && structure.hasStructure) {
+          console.log('✅ Structure extracted successfully - opening document outline');
+          setShowDocumentOutline(true);
+        }
       } catch (error) {
         console.error('Error extracting PDF structure:', error);
       } finally {
@@ -297,23 +279,33 @@ function App() {
       setIsExtractingStructure(true);
       console.log(`📖 Extracting structure for: ${document.name}`);
       
-      // Check if document was already analyzed (for current profile)
-      const isAnalyzed = await historyService.isDocumentAnalyzed(document.name, currentProfile?.id);
+      // history check removed - always extract fresh structure
       
-      if (isAnalyzed) {
-        console.log(`📚 Document "${document.name}" was previously analyzed, checking for cached structure...`);
-        const cachedResults = await historyService.getCachedResults(document.name, currentProfile?.id);
-        
-        if (cachedResults && cachedResults.structure) {
-          console.log('✅ Using cached structure from history');
-          setPdfStructure(cachedResults.structure);
+      // Extract fresh structure using Part 1A
+      let fileForExtraction = document.file;
+      
+      // If this is a database document, fetch it as a blob first
+      if (!fileForExtraction && document.dbDocumentId) {
+        console.log(`📥 Fetching database document ${document.dbDocumentId} for structure extraction...`);
+        try {
+          // For now, skip fetching from database - we'll handle file uploads directly
+          console.log(`⚠️ Database document fetching not implemented yet`);
+          setIsExtractingStructure(false);
+          return;
+        } catch (error) {
+          console.error('❌ Failed to fetch database document for structure extraction:', error);
           setIsExtractingStructure(false);
           return;
         }
       }
       
-      // Extract fresh structure using Part 1A
-      const structure = await part1aService.extractStructure(document.file);
+      if (!fileForExtraction) {
+        console.error('❌ No file available for structure extraction');
+        setIsExtractingStructure(false);
+        return;
+      }
+      
+      const structure = await part1aService.extractStructure(fileForExtraction);
       
       if (structure) {
         console.log('✅ Structure extracted:', structure);
@@ -323,6 +315,12 @@ function App() {
           ...structure,
           outline: navigationOutline
         });
+        
+        // Auto-open document outline when structure extraction completes
+        if (structure.hasStructure) {
+          console.log('✅ Part 1A completed successfully - opening document outline');
+          setShowDocumentOutline(true);
+        }
       } else {
         console.warn('⚠️ No structure extracted');
         setPdfStructure({ hasStructure: false });
@@ -358,14 +356,59 @@ function App() {
 
       setIsProcessing(true);
       try {
-        // Use all documents from the active collection
-        const collectionFiles = activeCollection.documents.map(doc => doc.file);
-        const result = await backendService.getRecommendations(
-          collectionFiles,
-          currentProfile?.persona || userProfile.role || 'Researcher',
-          currentProfile?.job_description || userProfile.task || 'Analyze document content',
-          currentProfile?.id
-        );
+        let result;
+        
+        // Check if this is a database collection (has dbCollectionId)
+        if (activeCollection.fromDatabase && activeCollection.dbCollectionId) {
+          // Use the new collection analysis endpoint
+          console.log(`🗃️ Analyzing database collection "${activeCollection.name}" (ID: ${activeCollection.dbCollectionId})`);
+          result = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/part1b/analyze-collection`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+              collection_id: activeCollection.dbCollectionId,
+              persona: userProfile?.role || 'Researcher',
+              job: userProfile?.task || 'Analyze document content',
+              profile_id: 'default'
+            })
+          });
+          
+          if (!result.ok) {
+            throw new Error(`HTTP error! status: ${result.status}`);
+          }
+          
+          const data = await result.json();
+          
+          // Transform the result to match frontend format
+          const sections = data.extracted_sections || [];
+          const transformedSections = sections.slice(0, 3).map((section, index) => ({
+            id: `section-${index}`,
+            document: section.document,
+            page: `Page ${section.page_number}`,
+            section: section.section_title,
+            description: `Ranked #${section.importance_rank} most relevant section for your task`,
+            relevance: Math.max(85 - (section.importance_rank - 1) * 5, 70),
+            color: index === 0 ? 'green' : index === 1 ? 'blue' : 'purple',
+            originalData: section,
+            keyPoints: section.content ? section.content.split('\n').slice(0, 3) : [section.section_title],
+          }));
+          
+          result = {
+            recommendations: transformedSections,
+            session_id: data.session_id
+          };
+        } else {
+          // Use the original file-based approach for non-database collections
+          const collectionFiles = activeCollection.documents.map(doc => doc.file);
+          result = await backendService.getRecommendations(
+            collectionFiles,
+            userProfile?.role || 'Researcher',
+            userProfile?.task || 'Analyze document content',
+            'default'
+          );
+        }
         
         // Handle new return format with session_id
         const recs = result.recommendations || result; // Support both old and new format
@@ -391,7 +434,7 @@ function App() {
         }));
         setHighlightedSections(highlights);
         
-        console.log(`✅ Analyzed ${collectionFiles.length} PDFs from collection "${activeCollection.name}" - Results cached`);
+        console.log(`✅ Analyzed ${activeCollection.documents.length} PDFs from collection "${activeCollection.name}" - Results cached`);
       } catch (error) {
         console.error('Error getting collection recommendations:', error);
         setRecommendations([]);
@@ -405,9 +448,9 @@ function App() {
       try {
         const result = await backendService.getRecommendations(
           [document.file],
-          currentProfile?.persona || userProfile.role || 'Researcher',
-          currentProfile?.job_description || userProfile.task || 'Analyze document content',
-          currentProfile?.id
+          userProfile?.role || 'Researcher',
+          userProfile?.task || 'Analyze document content',
+          'default'
         );
         
         // Handle new return format with session_id
@@ -476,35 +519,46 @@ function App() {
 
   const handleCreateCollection = async (name, files) => {
     try {
-      if (!currentProfile?.id) {
-        console.error('❌ Cannot create collection: No profile selected');
-        alert('Please select a profile before creating a collection.');
-        return;
+      console.log(`🔨 Creating collection "${name}" with ${files.length} documents`);
+
+      // Upload each file as a separate document
+      const uploadedDocuments = [];
+      for (const file of files) {
+        try {
+          const document = await documentService.uploadDocument(file, file.name.replace('.pdf', ''));
+          uploadedDocuments.push(document);
+          console.log(`✅ Uploaded document: ${document.original_filename}`);
+        } catch (error) {
+          console.error(`❌ Failed to upload ${file.name}:`, error);
+        }
       }
 
-      console.log(`🔨 Creating collection "${name}" for profile: ${currentProfile.profile_name} (ID: ${currentProfile.id})`);
+      // Create a frontend collection representation
+      const frontendCollection = {
+        id: Date.now(), // Temporary ID for frontend
+        title: name,
+        name: name,
+        documents: uploadedDocuments.map(doc => ({
+          id: doc.id,
+          name: doc.original_filename,
+          title: doc.title,
+          file: null, // File object not needed for uploaded docs
+          dbDocumentId: doc.id
+        })),
+        uploadDate: new Date().toISOString(),
+        tags: ['Collection'],
+        isUploaded: true
+      };
 
-      // Create collection in backend
-      const backendCollection = await collectionService.createCollection(
-        name, 
-        files, 
-        null, // description
-        currentProfile.id
-      );
-
-      console.log('✅ Backend collection created:', backendCollection);
-
-      // Convert to frontend format and add to state
-      const frontendCollection = collectionService.convertToFrontendFormat(backendCollection);
       setCollections(prev => {
         const newCollections = [frontendCollection, ...prev];
-        console.log('📚 Updated collections state:', newCollections.map(c => `${c.name} (Profile: ${c.profile_id || 'local'})`));
+        console.log('📚 Updated collections state:', newCollections.map(c => c.name));
         return newCollections;
       });
       setActiveCollection(frontendCollection);
       setShowCollectionUploader(false);
       
-      console.log(`✅ Created collection "${name}" with ${files.length} documents for profile ${currentProfile.profile_name}`);
+      console.log(`✅ Created collection "${name}" with ${uploadedDocuments.length} documents`);
     } catch (error) {
       console.error('❌ Failed to create collection:', error);
       alert('Failed to create collection. Please try again.');
@@ -532,20 +586,162 @@ function App() {
     }
   };
 
-  const handleFileUpload = (files) => {
-    const newDocuments = Array.from(files).map(file => ({
-      id: file.name,
-      name: file.name,
-      file: file, // Store the actual file object
-      status: 'new',
-      timestamp: 'Just now',
-      tags: ['New']
-    }));
+  const handleFileUpload = async (files) => {
+    console.log('📤 Bulk file upload:', files.length, 'files');
     
-    setDocuments(prev => [...newDocuments, ...prev]);
+    try {
+      // Upload each file to backend
+      const uploadedDocuments = [];
+      const failedUploads = [];
+      
+      for (const file of Array.from(files)) {
+        try {
+          console.log(`📤 Uploading ${file.name}...`);
+          const uploadedDoc = await documentService.uploadDocument(file, file.name.replace('.pdf', ''));
+          uploadedDocuments.push(uploadedDoc);
+          console.log(`✅ Uploaded ${file.name}`);
+        } catch (error) {
+          console.error(`❌ Failed to upload ${file.name}:`, error);
+          failedUploads.push(file.name);
+        }
+      }
+      
+      console.log(`✅ Bulk upload complete: ${uploadedDocuments.length} success, ${failedUploads.length} failed`);
+      
+      // Show success/error message
+      if (failedUploads.length > 0) {
+        alert(`Uploaded ${uploadedDocuments.length} files successfully. Failed: ${failedUploads.join(', ')}`);
+      } else {
+        alert(`Successfully uploaded ${uploadedDocuments.length} files!`);
+      }
+      
+      // Refresh documents from backend to update both arrays
+      try {
+        const allDocuments = await documentService.getAllDocuments();
+        
+        // Update Documents tab format
+        const frontendDocuments = allDocuments.map(doc => ({
+          id: doc.id,
+          name: doc.original_filename,
+          status: 'uploaded',
+          timestamp: new Date(doc.upload_timestamp).toLocaleDateString(),
+          tags: ['PDF', 'Backend'],
+          dbDocumentId: doc.id
+        }));
+        
+        // Update Collections format
+        const documentCollections = allDocuments.map(doc => ({
+          id: doc.id,
+          title: doc.title || doc.original_filename,
+          filename: doc.original_filename,
+          uploadDate: doc.upload_timestamp,
+          tags: ['PDF'],
+          isUploaded: true,
+          documents: [doc]
+        }));
+        
+        // Set both arrays
+        setDocuments(frontendDocuments);
+        setCollections(documentCollections);
+        console.log('🔄 Documents refreshed after bulk upload');
+      } catch (error) {
+        console.error('⚠️ Failed to refresh documents after bulk upload:', error);
+      }
+      
+    } catch (error) {
+      console.error('❌ Bulk upload error:', error);
+      alert('Failed to upload files. Please try again.');
+    }
+  };
+
+  const handleSinglePDFUpload = async (file) => {
+    console.log('🎯 Single PDF upload:', file.name);
     
-    if (userProfile.role && userProfile.task) {
-      startBackgroundAnalysis();
+    try {
+      // Upload to backend first
+      console.log('📤 Uploading to backend...');
+      const uploadedDocument = await documentService.uploadDocument(file, file.name.replace('.pdf', ''));
+      console.log('✅ Document uploaded to backend:', uploadedDocument);
+      
+      // Create frontend document object
+      const singleDocument = {
+        id: uploadedDocument.id,
+        name: uploadedDocument.original_filename,
+        file: file, // Keep file for immediate viewing
+        status: 'single-upload',
+        timestamp: 'Just uploaded',
+        tags: ['Single Upload', 'Ready'],
+        dbDocumentId: uploadedDocument.id
+      };
+      
+      // Add to documents list for immediate display
+      setDocuments(prev => [singleDocument, ...prev]);
+      
+      // Also refresh the documents from backend to ensure sync
+      try {
+        const allDocuments = await documentService.getAllDocuments();
+        
+        // Update Documents tab format
+        const frontendDocuments = allDocuments.map(doc => ({
+          id: doc.id,
+          name: doc.original_filename,
+          status: 'uploaded',
+          timestamp: new Date(doc.upload_timestamp).toLocaleDateString(),
+          tags: ['PDF', 'Backend'],
+          dbDocumentId: doc.id
+        }));
+        
+        // Update Collections format
+        const documentCollections = allDocuments.map(doc => ({
+          id: doc.id,
+          title: doc.title || doc.original_filename,
+          filename: doc.original_filename,
+          uploadDate: doc.upload_timestamp,
+          tags: ['PDF'],
+          isUploaded: true,
+          documents: [doc]
+        }));
+        
+        // Set both arrays
+        setDocuments(frontendDocuments);
+        setCollections(documentCollections);
+        console.log('🔄 Documents refreshed from backend');
+      } catch (error) {
+        console.error('⚠️ Failed to refresh documents from backend:', error);
+      }
+      
+      // Immediately select and open this document
+      setCurrentDocument(singleDocument);
+      
+      // Start extracting PDF structure in background
+      setIsExtractingStructure(true);
+      try {
+        const structure = await part1aService.extractStructure(file);
+        setPdfStructure(structure);
+        console.log('✅ PDF structure extracted for single upload:', structure);
+      } catch (error) {
+        console.error('❌ Failed to extract PDF structure:', error);
+      } finally {
+        setIsExtractingStructure(false);
+      }
+      
+      console.log('✅ Single PDF uploaded and opened:', file.name);
+      
+    } catch (error) {
+      console.error('❌ Error handling single PDF upload:', error);
+      
+      // Fallback: create local document if backend fails
+      const singleDocument = {
+        id: file.name + '_single_' + Date.now(),
+        name: file.name,
+        file: file,
+        status: 'single-upload',
+        timestamp: 'Just uploaded',
+        tags: ['Single Upload', 'Local Only']
+      };
+      
+      setDocuments(prev => [singleDocument, ...prev]);
+      setCurrentDocument(singleDocument);
     }
   };
 
@@ -667,17 +863,7 @@ function App() {
     };
   }, [audioUrl]);
 
-  const handleLoadSession = (session) => {
-    console.log('Loading session from history tab:', session);
-    // Here you can implement loading a session
-    // You could restore documents, recommendations, etc. from the session data
-    
-    // If the session has documents, you could restore them
-    if (session.documents && session.documents.length > 0) {
-      console.log('Session contains documents:', session.documents.map(d => d.filename));
-      // Future enhancement: restore documents and analysis state
-    }
-  };
+  // history session loading removed
 
   // Document Outline handlers
   const handleCloseDocumentOutline = () => {
@@ -706,7 +892,12 @@ function App() {
 
         {/* Show Tutorial after home page */}
         {!showHomePage && showTutorial && (
-          <InteractiveTutorial onComplete={handleTutorialComplete} />
+          <InteractiveTutorial 
+            onComplete={handleTutorialComplete}
+            onShowSidebar={handleTutorialShowSidebar}
+            onShowUploader={handleTutorialShowUploader}
+            onHighlightRightSidebar={handleTutorialHighlightRightSidebar}
+          />
         )}
 
         {/* Show Onboarding if needed (legacy) */}
@@ -721,9 +912,6 @@ function App() {
               userProfile={userProfile}
               isProcessing={isProcessing}
               onRestartTutorial={handleRestartTutorial}
-              currentProfile={currentProfile}
-              onProfileChange={setCurrentProfile}
-              onManageProfiles={() => setShowProfileManager(true)}
               onShowHomePage={handleShowHomePage}
             />
 
@@ -733,6 +921,7 @@ function App() {
             documents={documents}
             onDocumentSelect={handleDocumentSelect}
             onFileUpload={handleFileUpload}
+            onSinglePDFUpload={handleSinglePDFUpload}
             currentDocument={currentDocument}
             onShowUploader={() => setShowUploader(true)}
             collections={collections}
@@ -740,12 +929,13 @@ function App() {
             onSelectCollection={handleSelectCollection}
             onShowCollectionUploader={() => setShowCollectionUploader(true)}
             onCollectionDocumentSelect={handleCollectionDocumentSelect}
-            onLoadSession={handleLoadSession}
+            tutorialActiveTab={tutorialSidebarTab}
+            // onLoadSession removed
           />
 
           <div className="flex-1 flex">
-            {/* Document Outline Panel - shows when document is selected */}
-            {showDocumentOutline && currentDocument ? (
+            {/* Document Outline Panel - shows when document is selected AND outline is enabled */}
+            {showDocumentOutline && currentDocument && (
               <DocumentOutline
                 currentDocument={currentDocument}
                 pdfStructure={pdfStructure}
@@ -754,15 +944,17 @@ function App() {
                 onNavigateToSection={handleNavigateToSection}
                 onClose={handleCloseDocumentOutline}
               />
-            ) : (
-              // Placeholder for tutorial highlighting
+            )}
+
+            {/* Tutorial placeholder - only shows during tutorial */}
+            {showTutorial && !showDocumentOutline && (
               <div 
                 id="document-outline-placeholder" 
                 className={`w-80 flex-shrink-0 border-r transition-colors duration-300 flex flex-col h-full ${
                   isDarkMode 
                     ? 'bg-gray-900/30 border-gray-700' 
                     : 'bg-gray-50/30 border-gray-200'
-                } ${showTutorial ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                }`}
               >
                 <div className={`p-4 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
                   <h3 className={`font-semibold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -792,8 +984,8 @@ function App() {
               />
             </div>
 
-            <SmartConnections 
-              id="smart-connections"
+            <RightSidebar 
+              id="right-sidebar"
               currentDocument={currentDocument}
               recommendations={recommendations}
               currentSessionId={currentSessionId}
@@ -805,7 +997,7 @@ function App() {
               isExtractingStructure={isExtractingStructure}
               currentSection={currentSection}
               userProfile={userProfile}
-              currentProfile={currentProfile}
+              tutorialHighlightedComponent={tutorialHighlightedComponent}
             />
           </div>
         </div>
@@ -855,19 +1047,6 @@ function App() {
             </div>
           </div>
         )}
-
-        {/* Podcast Button */}
-        <div id="podcast-button" className="fixed bottom-6 right-6 z-40">
-          <PodcastButton
-            onClick={handlePodcastGeneration}
-            currentDocument={currentDocument}
-            selectedSection={currentSection}
-            userProfile={userProfile}
-            currentProfile={currentProfile}
-            recommendations={recommendations}
-            currentSessionId={currentSessionId}
-          />
-        </div>
 
         {/* Podcast Modal */}
         {showPodcastModal && podcastData && (
@@ -1093,18 +1272,6 @@ function App() {
           </div>
         )}
 
-        {/* Profile Manager Modal */}
-        {!showHomePage && showProfileManager && (
-          <ProfileManager
-            isOpen={showProfileManager}
-            onClose={() => setShowProfileManager(false)}
-            onProfileSelect={(profile) => {
-              setCurrentProfile(profile);
-              setShowProfileManager(false);
-            }}
-            currentProfile={currentProfile}
-          />
-        )}
             </>
         )}
 

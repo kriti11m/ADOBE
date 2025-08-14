@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Moon, Sun, HelpCircle, User, UserPlus } from 'lucide-react';
+import { Settings, Moon, Sun, HelpCircle } from 'lucide-react';
 import { useDarkMode } from '../App';
 
 const Navigation = ({ 
@@ -9,11 +9,8 @@ const Navigation = ({
   onOpenCollectionUploader,
   onRestartTutorial,
   onOpenSettings,
-  currentProfile,
-  onProfileChange,
   onShowHomePage = () => {}, // Add this prop
-  userProfile,
-  onManageProfiles
+  userProfile
 }) => {
   const { isDarkMode, toggleDarkMode } = useDarkMode();
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
@@ -67,29 +64,8 @@ const Navigation = ({
         </div>
         
         <div className="flex items-center space-x-4">
-          {/* Current Profile Display - Read-only */}
-          {currentProfile && (
-            <div className={`flex items-center space-x-3 px-4 py-2.5 rounded-xl glass border ${
-              isDarkMode 
-                ? 'bg-gradient-to-r from-blue-900/40 to-purple-900/40 text-blue-200 border-blue-800/30' 
-                : 'bg-gradient-to-r from-blue-50/80 to-purple-50/80 text-blue-800 border-blue-200/50'
-            }`}>
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                <span className="text-white text-sm font-medium">
-                  {currentProfile.profile_name.charAt(0).toUpperCase()}
-                </span>
-              </div>
-              <div className="text-sm">
-                <div className="font-semibold">{currentProfile.profile_name}</div>
-                <div className={`text-xs opacity-75 ${
-                  isDarkMode ? 'text-blue-300' : 'text-blue-600'
-                }`}>{currentProfile.persona}</div>
-              </div>
-            </div>
-          )}
-          
-          {/* User Profile (Legacy - show only if no current profile) */}
-          {!currentProfile && userProfile.role && (
+          {/* User Profile (Legacy) */}
+          {userProfile.role && (
             <div className={`flex items-center space-x-3 px-4 py-2 rounded-xl glass cursor-pointer transition-all duration-300 hover:scale-105 ${
               isDarkMode 
                 ? 'bg-blue-900/30 text-blue-300 hover:bg-blue-800/40 border border-blue-800/30' 
@@ -104,19 +80,6 @@ const Navigation = ({
                 <span className={isDarkMode ? 'text-blue-300' : 'text-blue-700'}>{userProfile.task}</span>
               </div>
             </div>
-          )}
-          
-          {/* Create New Profile Button - Show when no profile exists */}
-          {!currentProfile && (
-            <button
-              id="create-profile-btn"
-              onClick={onManageProfiles}
-              className="btn-primary flex items-center space-x-2 px-4 py-2.5 rounded-xl font-medium focus-ring"
-              title="Create Your Profile"
-            >
-              <UserPlus className="w-5 h-5" />
-              <span className="text-sm font-medium">Create Profile</span>
-            </button>
           )}
           
           {/* Dark Mode Toggle */}
@@ -156,43 +119,7 @@ const Navigation = ({
                   : 'bg-white/90 border-gray-200/50'
               }`}>
                 <div className="p-3">
-                  {/* Profile Management Section - Only show if user has profiles */}
-                  {currentProfile && (
-                    <div className={`pb-3 mb-3 border-b ${
-                      isDarkMode ? 'border-gray-700/50' : 'border-gray-200/50'
-                    }`}>
-                      <div className={`text-xs font-semibold px-3 py-2 mb-2 ${
-                        isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                      }`}>
-                        Profile Management
-                      </div>
-                      
-                      <button
-                        id="manage-profiles-btn"
-                        onClick={() => {
-                          setShowSettingsMenu(false);
-                          onManageProfiles();
-                        }}
-                        className={`w-full text-left p-3 rounded-xl transition-all duration-200 text-sm flex items-center gap-3 group ${
-                          isDarkMode 
-                            ? 'hover:bg-gray-700/50 text-white' 
-                            : 'hover:bg-gray-100/50 text-gray-900'
-                        }`}
-                      >
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
-                          <User className="w-4 h-4 text-white" />
-                        </div>
-                        <div>
-                          <div className="font-medium">Manage Profiles</div>
-                          <div className={`text-xs ${
-                            isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                          }`}>Edit, switch, or create profiles</div>
-                        </div>
-                      </button>
-                    </div>
-                  )}
-                  
-                  {/* Other Settings */}
+                  {/* General Settings */}
                   <div className={`text-xs font-semibold px-3 py-2 mb-2 ${
                     isDarkMode ? 'text-gray-400' : 'text-gray-600'
                   }`}>

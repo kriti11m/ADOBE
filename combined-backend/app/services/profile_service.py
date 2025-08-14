@@ -2,18 +2,18 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc, and_
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-from ..database.models import UserProfile, AnalysisSession, PDFCollection
+from ..database.models import UserProfile, PDFCollection
+# AnalysisSession removed with history functionality
 
 class ProfileService:
     def __init__(self, db: Session):
         self.db = db
     
-    def create_profile(self, profile_name: str, persona: str, job_description: str) -> UserProfile:
+    def create_profile(self, profile_name: str, description: Optional[str] = None) -> UserProfile:
         """Create a new user profile"""
         profile = UserProfile(
             profile_name=profile_name,
-            persona=persona,
-            job_description=job_description,
+            description=description,
             is_default=False
         )
         
@@ -56,7 +56,7 @@ class ProfileService:
         )
     
     def update_profile(self, profile_id: int, profile_name: str = None, 
-                      persona: str = None, job_description: str = None) -> Optional[UserProfile]:
+                      description: str = None) -> Optional[UserProfile]:
         """Update an existing profile"""
         profile = self.get_profile_by_id(profile_id)
         if not profile:
@@ -65,10 +65,8 @@ class ProfileService:
         # Update fields if provided
         if profile_name is not None:
             profile.profile_name = profile_name
-        if persona is not None:
-            profile.persona = persona
-        if job_description is not None:
-            profile.job_description = job_description
+        if description is not None:
+            profile.description = description
         
         profile.updated_at = datetime.utcnow()
         
@@ -133,12 +131,7 @@ class ProfileService:
         if not profile:
             return {}
         
-        total_sessions = (
-            self.db.query(AnalysisSession)
-            .filter(AnalysisSession.profile_id == profile_id)
-            .count()
-        )
-        
+        # History sessions removed - only track collections now
         total_collections = (
             self.db.query(PDFCollection)
             .filter(PDFCollection.profile_id == profile_id)
@@ -150,7 +143,6 @@ class ProfileService:
             "profile_name": profile.profile_name,
             "persona": profile.persona,
             "job_description": profile.job_description,
-            "total_sessions": total_sessions,
             "total_collections": total_collections,
             "created_at": profile.created_at.isoformat(),
             "is_default": profile.is_default

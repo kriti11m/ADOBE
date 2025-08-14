@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { ADOBE_CONFIG } from '../config/adobe';
+import collectionService from '../services/collectionService';
 
 const FinalAdobePDFViewer = forwardRef(({ 
   selectedDocument, 
@@ -139,7 +140,7 @@ const FinalAdobePDFViewer = forwardRef(({
         divId: "adobe-dc-view"
       });
 
-      // Build content descriptor: support either backend URL (file_path) or local File object
+      // Build content descriptor: support either backend URL (file_path), local File object, or database document
       let contentDescriptor = null;
       let metaFileName = selectedDocument.name || selectedDocument.file?.name || 'document.pdf';
       if (selectedDocument.file && selectedDocument.file.arrayBuffer) {
@@ -148,8 +149,12 @@ const FinalAdobePDFViewer = forwardRef(({
       } else if (selectedDocument.file_path) {
         console.log('📄 Loading PDF file by URL:', selectedDocument.file_path);
         contentDescriptor = { content: { location: { url: `http://localhost:8000/files/${selectedDocument.file_path}` } }, metaData: { fileName: metaFileName } };
+      } else if (selectedDocument.dbDocumentId) {
+        console.log(`📥 Fetching database document ${selectedDocument.dbDocumentId} as blob...`);
+        const blobUrl = await collectionService.getDocumentBlobUrl(selectedDocument.dbDocumentId);
+        contentDescriptor = { content: { location: { url: blobUrl } }, metaData: { fileName: metaFileName } };
       } else {
-        throw new Error('Selected document has neither file nor file_path');
+        throw new Error('Selected document has neither file, file_path, nor dbDocumentId');
       }
 
       // Preview the PDF file and get viewer instance

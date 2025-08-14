@@ -1,5 +1,5 @@
 // Backend Service for communicating with FastAPI backend
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8001';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 class BackendService {
   // Test connection to backend
@@ -78,24 +78,65 @@ class BackendService {
         color: index === 0 ? 'green' : index === 1 ? 'blue' : 'purple',
         originalData: section,
         keyPoints: this.extractKeyPoints(section.content || section.section_title),
-        fullContent: section.content || section.section_title,
-        conceptType: this.identifyConceptType(section.section_title),
-        // Enhanced navigation data
-        sectionTitle: section.section_title,
-        pageNumber: section.page_number,
-        coordinates: section.coordinates || null
       }));
       
-      console.log('Transformed sections for Smart Connections:', transformedSections);
-      
-      // Return both recommendations and session_id for cross-document analysis
       return {
         recommendations: transformedSections,
-        session_id: result.session_id,
-        metadata: result.metadata
+        session_id: result.session_id
       };
     } catch (error) {
       console.error('Error getting recommendations:', error);
+      throw error;
+    }
+  }
+
+  // Get collection recommendations by collection ID (Part 1B)
+  async getCollectionRecommendations(collectionId, persona = 'Researcher', job = 'Analyze document content', profileId = null) {
+    const formData = new FormData();
+    
+    // Append collection_id and other form data
+    formData.append('collection_id', collectionId);
+    formData.append('persona', persona);
+    formData.append('job', job);
+    
+    // Append profile_id if provided
+    if (profileId) {
+      formData.append('profile_id', profileId);
+    }
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/part1b/analyze-collection`, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      // Transform backend response to frontend format
+      // Take top 3 sections from extracted_sections and format for SmartConnections
+      const sections = result.extracted_sections || [];
+      const transformedSections = sections.slice(0, 3).map((section, index) => ({
+        id: `section-${index}`,
+        document: section.document,
+        page: `Page ${section.page_number}`,
+        section: section.section_title,
+        description: `Ranked #${section.importance_rank} most relevant section for your task: "${job}"`,
+        relevance: Math.max(85 - (section.importance_rank - 1) * 5, 70), // Calculate relevance score
+        color: index === 0 ? 'green' : index === 1 ? 'blue' : 'purple',
+        originalData: section,
+        keyPoints: this.extractKeyPoints(section.content || section.section_title),
+      }));
+      
+      return {
+        recommendations: transformedSections,
+        session_id: result.session_id
+      };
+    } catch (error) {
+      console.error('Error getting collection recommendations:', error);
       throw error;
     }
   }
@@ -366,46 +407,7 @@ class BackendService {
     return results;
   }
 
-  // Get document history
-  async getHistory() {
-    try {
-      const response = await fetch(`${API_BASE_URL}/history/documents`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('Error getting document history:', error);
-      throw error;
-    }
-  }
-
-  // Save document to history
-  async saveToHistory(filename, analysis_results) {
-    try {
-      const response = await fetch(`${API_BASE_URL}/history/save`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          filename,
-          analysis_results
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('Error saving to history:', error);
-      throw error;
-    }
-  }
+  // history methods removed
 }
 
 const backendService = new BackendService();
