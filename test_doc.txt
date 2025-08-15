@@ -1,0 +1,7 @@
+﻿Adobe Hackathon Test Document
+
+This document contains information about:
+- Machine learning algorithms
+- Neural networks and AI
+- Document processing features
+- PDF analysis capabilities
