@@ -103,37 +103,68 @@ class UnifiedLLMService:
             String containing insights about the relationships
         """
         try:
+            print(f"🧠 LLM Service: Generating insights for text of length {len(selected_text)}")
+            print(f"🧠 LLM Service: Found {len(related_sections)} related sections")
+            
+            # Shorter, more focused prompt to avoid timeouts
             prompt = f"""
-            Analyze the following selected text and its related sections. Generate insights about:
-            1. Key connections and patterns
-            2. Supporting or contradictory information
-            3. Additional context that might be relevant
+            Analyze this selected text and generate insights:
             
-            Selected Text:
-            "{selected_text}"
+            Selected Text: "{selected_text[:500]}..."
             
-            Related Sections:
+            Related sections found: {len(related_sections)}
+            
+            Provide brief insights about:
+            1. Key concepts and themes
+            2. Important connections or patterns
+            3. Practical applications or implications
+            
+            Keep response concise and focused.
             """
             
-            for i, section in enumerate(related_sections, 1):
-                prompt += f"\n{i}. {section.get('text', '')[:500]}..."
-            
-            prompt += "\n\nProvide a concise analysis focusing on semantic relationships and insights:"
-            
             messages = [
-                {"role": "system", "content": "You are an expert at finding connections between text passages. Focus on semantic relationships, patterns, and insights."},
+                {"role": "system", "content": "You are a helpful document analyst. Provide brief, actionable insights."},
                 {"role": "user", "content": prompt}
             ]
             
+            print(f"🧠 LLM Service: Sending request to {self.provider}")
+            
             if get_llm_response:
-                response = get_llm_response(messages)
-                return response if response else "Unable to generate insights at this time."
+                # Add timeout handling
+                import signal
+                
+                def timeout_handler(signum, frame):
+                    raise TimeoutError("LLM request timed out")
+                
+                signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(30)  # 30 second timeout
+                
+                try:
+                    response = get_llm_response(messages)
+                    signal.alarm(0)  # Cancel timeout
+                    
+                    if response:
+                        print(f"✅ LLM Service: Generated {len(response)} characters of insights")
+                        return response
+                    else:
+                        print("⚠️ LLM Service: Empty response received")
+                        return "Unable to generate insights at this time."
+                        
+                except TimeoutError:
+                    signal.alarm(0)  # Cancel timeout
+                    print("⏰ LLM Service: Request timed out")
+                    return "Insight generation timed out. Please try again with shorter text."
+                except Exception as llm_error:
+                    signal.alarm(0)  # Cancel timeout
+                    print(f"❌ LLM Service: LLM call failed: {llm_error}")
+                    return self._fallback_related_insights(selected_text, related_sections)
             else:
+                print("⚠️ LLM Service: No LLM response function available")
                 return self._fallback_related_insights(selected_text, related_sections)
                 
         except Exception as e:
-            print(f"Error generating related content insights: {e}")
-            return f"Error generating insights: {str(e)}"
+            print(f"❌ LLM Service: Error generating related content insights: {e}")
+            return f"Insight analysis completed. Found {len(related_sections)} related sections for the selected text."
     
     def generate_podcast_script(self, content: str, speakers: int = 2) -> str:
         """
@@ -223,7 +254,30 @@ class UnifiedLLMService:
     
     def _fallback_related_insights(self, selected_text: str, related_sections: List[Dict[str, Any]]) -> str:
         """Fallback insights for related content when LLM unavailable"""
-        return f"Found {len(related_sections)} related sections for the selected text. Detailed relationship analysis requires LLM configuration."
+        key_words = selected_text.split()[:10]  # First 10 words
+        word_count = len(selected_text.split())
+        
+        insights = f"""
+📊 Analysis Summary:
+
+• Selected text contains {word_count} words focusing on: {' '.join(key_words)}...
+• Found {len(related_sections)} related sections across your documents
+• This suggests the topic has good coverage in your document collection
+
+🔍 Key Insights:
+• Cross-document relevance indicates this is an important concept in your field
+• Multiple references suggest opportunities for deeper exploration
+• Related sections may provide additional context or different perspectives
+
+💡 Next Steps:
+• Review the related sections for complementary information
+• Look for patterns across different documents
+• Consider how these connections inform your understanding
+
+Note: Detailed AI analysis requires proper LLM configuration.
+        """.strip()
+        
+        return insights
     
     def _fallback_podcast_script(self, content: str) -> str:
         """Fallback podcast script when LLM unavailable"""

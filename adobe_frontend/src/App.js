@@ -8,6 +8,7 @@ import DocumentOutline from './components/DocumentOutline';
 import FinalAdobePDFViewer from './components/FinalAdobePDFViewer';
 import PDFUploader from './components/PDFUploader';
 import CollectionUploader from './components/CollectionUploader';
+import AIAssistant from './components/AIAssistant';
 import { Headphones, FileText, Lightbulb, Sparkles, Brain, Zap } from 'lucide-react';
 import backendService from './services/backendService';
 import part1aService from './services/part1aService';
@@ -72,6 +73,9 @@ function App() {
   // Finale text selection features
   const [selectedTextData, setSelectedTextData] = useState(null);
   const [relatedSections, setRelatedSections] = useState([]);
+  
+  // AI Assistant state
+  const [showAIAssistant, setShowAIAssistant] = useState(false);
   
   // Part 1A Integration - Document Structure
   const [pdfStructure, setPdfStructure] = useState(null);
@@ -377,13 +381,29 @@ function App() {
       setSelectedTextData(selectionData);
       setRelatedSections(selectionData.relatedSections || []);
       
-      // Optional: Auto-switch to Documents tab to show related sections
-      // You can uncomment this if you want automatic tab switching
-      // setActiveTab('documents');
+      // Handle specific actions
+      if (selectionData?.action === 'ai-assistant') {
+        console.log('🤖 AI Assistant action triggered, showing modal');
+        setShowAIAssistant(true);
+      } else if (selectionData?.action === 'smart-connections') {
+        console.log('🔗 Smart Connections action triggered');
+        // Handle smart connections logic here
+      } else if (selectionData?.action === 'podcast-mode') {
+        console.log('🎧 Podcast Mode action triggered');
+        // Handle podcast mode logic here
+      } else {
+        // Default behavior for regular text selection (no specific action)
+        console.log('📝 Regular text selection (no specific action)');
+      }
       
     } catch (error) {
       console.error('❌ Error handling text selection:', error);
     }
+  };
+
+  // AI Assistant handlers
+  const handleCloseAIAssistant = () => {
+    setShowAIAssistant(false);
   };
 
   const handleGetRecommendations = async (document, section = null) => {
@@ -1047,26 +1067,49 @@ function App() {
                 </Card>
 
                 {/* AI Features */}
-                <Card className="bg-gradient-to-br from-purple-100 to-pink-100 border-purple-300/40 backdrop-blur-sm shadow-lg">
+                <Card 
+                  className={`bg-gradient-to-br from-purple-100 to-pink-100 border-purple-300/40 backdrop-blur-sm shadow-lg cursor-pointer transition-all duration-300 hover:shadow-xl hover:scale-105 ${
+                    selectedTextData?.selectedText ? 'ring-2 ring-purple-300' : ''
+                  }`}
+                  onClick={() => {
+                    if (selectedTextData?.selectedText) {
+                      setShowAIAssistant(true);
+                    }
+                  }}
+                >
                   <div className="p-6">
                     <div className="flex items-center gap-3 mb-4">
                       <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
                         <Brain className="w-5 h-5 text-white" />
                       </div>
-                      <h3 className="text-base font-semibold text-gray-900">AI Assistant</h3>
+                      <div className="flex-1">
+                        <h3 className="text-base font-semibold text-gray-900">AI Assistant</h3>
+                        {selectedTextData?.selectedText ? (
+                          <p className="text-xs text-purple-600 font-medium">
+                            Click to analyze selected text
+                          </p>
+                        ) : (
+                          <p className="text-xs text-gray-500">
+                            Select text in PDF to activate
+                          </p>
+                        )}
+                      </div>
+                      {selectedTextData?.selectedText && (
+                        <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                      )}
                     </div>
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 text-gray-700 text-sm">
                         <Zap className="w-3 h-3 text-purple-500" />
-                        <span>Document Summarization</span>
+                        <span>AI-Powered Insights</span>
                       </div>
                       <div className="flex items-center gap-2 text-gray-700 text-sm">
                         <Zap className="w-3 h-3 text-pink-500" />
-                        <span>Key Insights Extraction</span>
+                        <span>Key Takeaways</span>
                       </div>
                       <div className="flex items-center gap-2 text-gray-700 text-sm">
                         <Zap className="w-3 h-3 text-cyan-500" />
-                        <span>Cross-Document Analysis</span>
+                        <span>Context Analysis</span>
                       </div>
                     </div>
                   </div>
@@ -1355,6 +1398,13 @@ function App() {
             </div>
           </div>
         )}
+
+        {/* AI Assistant Modal */}
+        <AIAssistant
+          selectedTextData={selectedTextData}
+          show={showAIAssistant}
+          onClose={handleCloseAIAssistant}
+        />
 
             </>
         )}

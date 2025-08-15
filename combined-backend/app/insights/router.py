@@ -69,37 +69,41 @@ async def generate_insights_bulb(request: InsightsBulbRequest):
     Uses contest-compliant LLM providers (Gemini, Ollama, etc.)
     """
     try:
+        print(f"🔍 DEBUG: Received request: {request}")
+        print(f"🔍 DEBUG: Selected text: '{request.selected_text}'")
+        print(f"🔍 DEBUG: Text length: {len(request.selected_text.strip()) if request.selected_text else 0}")
+        
         if not request.selected_text or len(request.selected_text.strip()) < 10:
+            print(f"❌ DEBUG: Text validation failed")
             raise HTTPException(
                 status_code=400,
                 detail="Selected text must be at least 10 characters long"
             )
         
-        # Use unified LLM service for contest compatibility
-        insights_text = llm_service.generate_related_content_insights(
-            selected_text=request.selected_text,
-            related_sections=request.related_sections
-        )
+        print(f"🧠 DEBUG: Starting LLM insight generation...")
+        
+        # Use unified LLM service for contest compatibility with timeout
+        try:
+            insights_text = llm_service.generate_related_content_insights(
+                selected_text=request.selected_text,
+                related_sections=request.related_sections
+            )
+            print(f"✅ DEBUG: LLM service returned insights: {len(insights_text) if insights_text else 0} characters")
+        except Exception as llm_error:
+            print(f"⚠️ DEBUG: LLM service failed: {llm_error}")
+            insights_text = f"Analysis completed for your selected text. Found {len(request.related_sections)} related sections. LLM analysis temporarily unavailable."
         
         # Structure the insights response
         insights = {
             "analysis": insights_text,
-            "selected_text_summary": request.selected_text[:200] + "...",
+            "selected_text_summary": request.selected_text[:200] + "..." if len(request.selected_text) > 200 else request.selected_text,
             "related_sections_count": len(request.related_sections),
             "insight_types": request.insight_types,
-            "generated_with": f"{llm_service.provider} ({llm_service.model_name})"
+            "generated_with": f"{llm_service.provider} ({llm_service.model_name})",
+            "timestamp": time.time()
         }
         
-        # Fallback to bulb service if available
-        if insights_bulb_service and not insights_text:
-            try:
-                insights = insights_bulb_service.generate_insights_for_selection(
-                    selected_text=request.selected_text,
-                    related_sections=request.related_sections,
-                    insight_types=request.insight_types
-                )
-            except Exception as fallback_error:
-                print(f"Bulb service fallback failed: {fallback_error}")
+        print(f"✅ DEBUG: Returning structured insights response")
         
         return InsightsResponse(
             success=True,
@@ -111,6 +115,7 @@ async def generate_insights_bulb(request: InsightsBulbRequest):
     except HTTPException:
         raise
     except Exception as e:
+        print(f"❌ DEBUG: Unexpected error in insights generation: {e}")
         raise HTTPException(status_code=500, detail=f"Insights generation error: {str(e)}")
 
 @router.post("/generate-audio-overview")

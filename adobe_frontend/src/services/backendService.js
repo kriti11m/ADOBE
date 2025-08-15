@@ -167,7 +167,12 @@ class BackendService {
   // Find related sections using finale text selection service
   async findRelatedSections(selectedText, documentId, maxResults = 5) {
     try {
-      const response = await fetch(`${API_BASE_URL}/text-selection/find-related`, {
+      const url = `${API_BASE_URL}/text-selection/find-related`;
+      console.log('🔍 Finding related sections for selected text...');
+      console.log('🔗 Request URL:', url);
+      console.log('🔗 API_BASE_URL:', API_BASE_URL);
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -257,35 +262,6 @@ class BackendService {
         error: error.message,
         sections: []
       };
-    }
-  }
-
-  // Generate AI insights using finale insights bulb
-  async generateInsightsBulb(selectedText, relatedSections, insightTypes = null) {
-    try {
-      const defaultInsightTypes = ['key_takeaways', 'did_you_know', 'contradictions', 'examples'];
-      
-      const response = await fetch(`${API_BASE_URL}/insights/generate-insights-bulb`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          selected_text: selectedText,
-          related_sections: relatedSections,
-          insight_types: insightTypes || defaultInsightTypes
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data.insights;
-    } catch (error) {
-      console.error('Error generating insights:', error);
-      throw error;
     }
   }
 
@@ -397,46 +373,12 @@ class BackendService {
     }
   }
 
-  // Finale text selection feature - find related sections across documents
-  async findRelatedSections({ selectedText, documentId, documentName }) {
+  // Generate AI insights using finale insights bulb
+  async generateInsightsBulb(selectedText, relatedSections, insightTypes = null) {
     try {
-      console.log('🔍 Finding related sections for selected text...');
+      const defaultInsightTypes = ['key_takeaways', 'did_you_know', 'contradictions', 'examples'];
       
-      const response = await fetch(`${this.API_BASE}/text-selection/find-related`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          selected_text: selectedText,
-          document_id: documentId,
-          document_name: documentName,
-          limit: 5
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('✅ Related sections found:', data);
-      
-      return data.related_sections || [];
-      
-    } catch (error) {
-      console.error('❌ Error finding related sections:', error);
-      // Return empty array on error to avoid breaking the UI
-      return [];
-    }
-  }
-
-  // Finale insights bulb feature - generate AI insights for selected text
-  async generateInsights({ selectedText, relatedSections, documentContext }) {
-    try {
-      console.log('🧠 Generating AI insights for selected content...');
-      
-      const response = await fetch(`${this.API_BASE}/insights/bulb/generate`, {
+      const response = await fetch(`${API_BASE_URL}/insights/generate-insights-bulb`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -444,7 +386,7 @@ class BackendService {
         body: JSON.stringify({
           selected_text: selectedText,
           related_sections: relatedSections,
-          document_context: documentContext
+          insight_types: insightTypes || defaultInsightTypes
         })
       });
 
@@ -453,12 +395,9 @@ class BackendService {
       }
 
       const data = await response.json();
-      console.log('✅ AI insights generated:', data);
-      
-      return data;
-      
+      return data.insights;
     } catch (error) {
-      console.error('❌ Error generating insights:', error);
+      console.error('Error generating insights:', error);
       throw error;
     }
   }

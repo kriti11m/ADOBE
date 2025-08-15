@@ -6,6 +6,9 @@ import backendService from '../services/backendService';
 const FinalAdobePDFViewer = forwardRef(({ 
   selectedDocument, 
   onSectionHighlight,
+  onDocumentLoad,
+  onSectionSelect,
+  highlightedSections,
   className = ""
 }, ref) => {
   // State management
@@ -13,6 +16,8 @@ const FinalAdobePDFViewer = forwardRef(({
   const [error, setError] = useState(null);
   const [adobeAPIs, setAdobeAPIs] = useState(null);
   const [viewerReady, setViewerReady] = useState(false);
+  const [currentSelectedText, setCurrentSelectedText] = useState(''); // Store selected text
+  const [isRealSelection, setIsRealSelection] = useState(false); // Track if selection is from PDF or test
   
   // Refs
   const viewerRef = useRef(null);
@@ -101,133 +106,325 @@ const FinalAdobePDFViewer = forwardRef(({
   };
 
   // Handle text selection for finale functionality
-  const handleTextSelection = async (selectedTextData) => {
+  const handleTextSelection = async (action, textOverride = null) => {
     try {
-      console.log('🎯 Processing text selection for finale features...');
+      // Use override text first, then stored text, then current selection
+      let selectedText = textOverride || currentSelectedText;
       
-      if (!selectedTextData || !selectedTextData.text) {
-        console.warn('⚠️ No text selected');
+      console.log('🔍 handleTextSelection called with:', { action, textOverride, storedText: currentSelectedText, finalText: selectedText });
+      
+      if (!selectedText) {
+        const selection = window.getSelection();
+        selectedText = selection.toString().trim();
+        console.log('🔍 No stored text, got from selection:', selectedText);
+      }
+      
+      if (!selectedText) {
+        console.log('No text selected');
+        showTextSelectionNotification('No text selected');
         return;
       }
 
-      const selectedText = selectedTextData.text.trim();
-      if (selectedText.length < 10) {
-        console.warn('⚠️ Selected text too short for analysis');
-        return;
+      console.log('Selected text:', selectedText);
+      console.log('Action:', action);
+
+      // Always find related sections for context
+      try {
+        const relatedSections = await backendService.findRelatedSections(selectedText);
+        console.log('Found related sections:', relatedSections);
+        
+        // Update parent component with selected text and related sections
+        if (onSectionHighlight) {
+          onSectionHighlight({
+            selectedText: selectedText,
+            relatedSections: relatedSections || []
+          });
+        }
+        showTextSelectionNotification(relatedSections ? relatedSections.length : 0);
+        
+        // Handle specific actions with appropriate messages
+        switch(action) {
+          case 'ai-assistant':
+            console.log('Triggering AI Assistant with selected text:', selectedText);
+            // Update parent component with action info
+            if (onSectionHighlight) {
+              onSectionHighlight({
+                selectedText: selectedText,
+                relatedSections: relatedSections || [],
+                action: 'ai-assistant'
+              });
+            }
+            showTextSelectionNotification('AI Assistant activated');
+            break;
+          case 'smart-connections':
+            console.log('Triggering Smart Connections with selected text:', selectedText);
+            // Update parent component with action info
+            if (onSectionHighlight) {
+              onSectionHighlight({
+                selectedText: selectedText,
+                relatedSections: relatedSections || [],
+                action: 'smart-connections'
+              });
+            }
+            showTextSelectionNotification('Smart Connections activated');
+            break;
+          case 'podcast-mode':
+            console.log('Triggering Podcast Mode with selected text:', selectedText);
+            // Update parent component with action info
+            if (onSectionHighlight) {
+              onSectionHighlight({
+                selectedText: selectedText,
+                relatedSections: relatedSections || [],
+                action: 'podcast-mode'
+              });
+            }
+            showTextSelectionNotification('Podcast Mode activated');
+            break;
+          default:
+            console.log('Default text selection handling');
+            // Update parent component for default case
+            if (onSectionHighlight) {
+              onSectionHighlight({
+                selectedText: selectedText,
+                relatedSections: relatedSections || []
+              });
+            }
+        }
+      } catch (error) {
+        console.error('Error finding related sections:', error);
+        // Still update with selected text even if related sections fail
+        if (onSectionHighlight) {
+          onSectionHighlight({
+            selectedText: selectedText,
+            relatedSections: []
+          });
+        }
+        showTextSelectionNotification('Text selected successfully');
       }
-
-      console.log('📝 Selected text:', selectedText);
-
-      // Call the finale text selection service
-      const relatedSections = await backendService.findRelatedSections({
-        selectedText: selectedText,
-        documentId: selectedDocument.id,
-        documentName: selectedDocument.name
-      });
-
-      console.log('🔍 Found related sections:', relatedSections);
-
-      // Notify parent component about text selection
-      if (onSectionHighlight) {
-        onSectionHighlight({
-          selectedText: selectedText,
-          relatedSections: relatedSections,
-          sourceDocument: selectedDocument
-        });
+      
+      // Clear the current selection if it exists
+      try {
+        const selection = window.getSelection();
+        if (selection && selection.removeAllRanges) {
+          selection.removeAllRanges();
+        }
+      } catch (clearError) {
+        console.warn('Could not clear selection:', clearError);
       }
-
-      // Show a temporary notification to user
-      showTextSelectionNotification(relatedSections.length);
-
+      
     } catch (error) {
-      console.error('❌ Error processing text selection:', error);
+      console.error('Error in handleTextSelection:', error);
+      showTextSelectionNotification('Error processing text selection');
     }
   };
 
-  // Show floating action button for text selection
-  const showTextSelectionActions = (selectedText) => {
-    // Remove existing button if present
+  // Show enhanced floating action menu for text selection
+  const showTextSelectionActions = (selectedText, isRealPDFSelection = false) => {
+    // Store the selected text for later use
+    console.log('💾 Storing selected text:', selectedText, 'Real selection:', isRealPDFSelection);
+    
+    // Only update if it's a real selection, or if we don't have a real selection yet
+    if (isRealPDFSelection || !isRealSelection) {
+      setCurrentSelectedText(selectedText);
+      setIsRealSelection(isRealPDFSelection);
+    } else if (isRealSelection && !isRealPDFSelection) {
+      console.log('📋 Ignoring test selection because we have real PDF text selected');
+      return; // Don't override real selection with test selection
+    }
+    
+    // Remove existing menu if present
     hideTextSelectionActions();
     
-    const actionButton = document.createElement('div');
-    actionButton.id = 'finale-text-selection-action';
-    actionButton.style.cssText = `
+    const actionMenu = document.createElement('div');
+    actionMenu.id = 'finale-text-selection-action';
+    actionMenu.style.cssText = `
       position: fixed;
       top: 100px;
       right: 20px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 12px 16px;
-      border-radius: 12px;
-      box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.2);
       z-index: 10000;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      transition: all 0.3s ease;
-      border: none;
-      max-width: 280px;
+      min-width: 260px;
+      border: 1px solid rgba(0,0,0,0.1);
+      overflow: hidden;
     `;
     
-    actionButton.innerHTML = `
-      <span style="font-size: 18px;">🔍</span>
-      <span>Find Related Sections</span>
+    actionMenu.innerHTML = `
+      <div style="
+        padding: 16px 20px 12px 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-weight: 600;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      ">
+        <span style="font-size: 18px;">✨</span>
+        <span>Analyze Selected Text</span>
+      </div>
+      <div style="padding: 8px;">
+        <button id="ai-assistant-btn" style="
+          width: 100%;
+          padding: 12px 16px;
+          border: none;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border-radius: 8px;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          margin-bottom: 6px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          transition: all 0.2s ease;
+        " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(102,126,234,0.3)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+          🧠 AI Assistant
+          <span style="margin-left: auto; font-size: 11px; opacity: 0.8;">Gemini Insights</span>
+        </button>
+        
+        <button id="smart-connections-btn" style="
+          width: 100%;
+          padding: 12px 16px;
+          border: none;
+          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+          color: white;
+          border-radius: 8px;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          margin-bottom: 6px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          transition: all 0.2s ease;
+        " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(16,185,129,0.3)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+          🔗 Smart Connections
+          <span style="margin-left: auto; font-size: 11px; opacity: 0.8;">Find Related</span>
+        </button>
+        
+        <button id="podcast-mode-btn" style="
+          width: 100%;
+          padding: 12px 16px;
+          border: none;
+          background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+          color: white;
+          border-radius: 8px;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          margin-bottom: 6px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          transition: all 0.2s ease;
+        " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(245,158,11,0.3)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+          🎧 Podcast Mode
+          <span style="margin-left: auto; font-size: 11px; opacity: 0.8;">Audio Summary</span>
+        </button>
+        
+        <button id="close-menu-btn" style="
+          width: 100%;
+          padding: 8px 16px;
+          border: 1px solid #e5e7eb;
+          background: #f9fafb;
+          color: #6b7280;
+          border-radius: 8px;
+          font-size: 12px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        " onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#f9fafb'">
+          Cancel
+        </button>
+      </div>
     `;
     
-    actionButton.onclick = async () => {
-      console.log('🎯 Finale text selection action clicked');
-      actionButton.style.opacity = '0.7';
-      actionButton.innerHTML = '<span>⏳</span><span>Searching...</span>';
+    // Add event listeners
+    const aiBtn = actionMenu.querySelector('#ai-assistant-btn');
+    const smartBtn = actionMenu.querySelector('#smart-connections-btn');
+    const podcastBtn = actionMenu.querySelector('#podcast-mode-btn');
+    const closeBtn = actionMenu.querySelector('#close-menu-btn');
+    
+    aiBtn.onclick = async () => {
+      console.log('🧠 AI Assistant clicked for text:', selectedText.substring(0, 50) + '...');
+      aiBtn.innerHTML = '⏳ Generating AI Insights...';
+      aiBtn.style.opacity = '0.7';
       
       try {
-        // This will trigger the related sections search
-        await handleTextSelection({ text: selectedText });
+        // Pass the text directly from the closure
+        await handleTextSelection('ai-assistant', selectedText);
         
-        actionButton.innerHTML = '<span>✅</span><span>Found sections!</span>';
-        setTimeout(() => {
-          hideTextSelectionActions();
-        }, 2000);
-        
+        hideTextSelectionActions();
       } catch (error) {
-        actionButton.innerHTML = '<span>❌</span><span>Error occurred</span>';
-        setTimeout(() => {
-          hideTextSelectionActions();
-        }, 3000);
+        console.error('❌ AI Assistant error:', error);
+        aiBtn.innerHTML = '❌ Error occurred';
+        setTimeout(hideTextSelectionActions, 2000);
       }
     };
     
-    // Add hover effects
-    actionButton.onmouseenter = () => {
-      actionButton.style.transform = 'translateY(-2px)';
-      actionButton.style.boxShadow = '0 12px 30px rgba(0,0,0,0.2)';
+    smartBtn.onclick = async () => {
+      console.log('🔗 Smart Connections clicked for text:', selectedText.substring(0, 50) + '...');
+      smartBtn.innerHTML = '⏳ Finding Related Sections...';
+      smartBtn.style.opacity = '0.7';
+      
+      try {
+        // Pass the text directly from the closure
+        await handleTextSelection('smart-connections', selectedText);
+        
+        smartBtn.innerHTML = '✅ Found Related Sections!';
+        setTimeout(hideTextSelectionActions, 2000);
+      } catch (error) {
+        console.error('❌ Smart Connections error:', error);
+        smartBtn.innerHTML = '❌ Error occurred';
+        setTimeout(hideTextSelectionActions, 2000);
+      }
     };
     
-    actionButton.onmouseleave = () => {
-      actionButton.style.transform = 'translateY(0)';
-      actionButton.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)';
+    podcastBtn.onclick = async () => {
+      console.log('🎧 Podcast Mode clicked for text:', selectedText.substring(0, 50) + '...');
+      podcastBtn.innerHTML = '⏳ Creating Audio Summary...';
+      podcastBtn.style.opacity = '0.7';
+      
+      try {
+        // Pass the text directly from the closure
+        await handleTextSelection('podcast-mode', selectedText);
+        
+        podcastBtn.innerHTML = '✅ Podcast Generated!';
+        setTimeout(hideTextSelectionActions, 2000);
+      } catch (error) {
+        console.error('❌ Podcast Mode error:', error);
+        podcastBtn.innerHTML = '❌ Error occurred';
+        setTimeout(hideTextSelectionActions, 2000);
+      }
     };
     
-    document.body.appendChild(actionButton);
+    closeBtn.onclick = () => {
+      hideTextSelectionActions();
+    };
     
-    // Auto-hide after 10 seconds
+    document.body.appendChild(actionMenu);
+    
+    // Auto-hide after 15 seconds
     setTimeout(() => {
       hideTextSelectionActions();
-    }, 10000);
+    }, 15000);
   };
 
-  // Hide text selection action button
+  // Hide text selection action menu
   const hideTextSelectionActions = () => {
     const existingButton = document.getElementById('finale-text-selection-action');
     if (existingButton) {
       existingButton.remove();
     }
+    // Clear stored selected text
+    setCurrentSelectedText('');
   };
 
   // Show notification for text selection
-  const showTextSelectionNotification = (relatedCount) => {
+  const showTextSelectionNotification = (message) => {
     // Create a temporary notification
     const notification = document.createElement('div');
     notification.style.cssText = `
@@ -243,7 +440,12 @@ const FinalAdobePDFViewer = forwardRef(({
       font-size: 14px;
       font-weight: 500;
     `;
-    notification.innerHTML = `🔍 Found ${relatedCount} related sections`;
+    
+    if (typeof message === 'number') {
+      notification.innerHTML = `🔍 Found ${message} related sections`;
+    } else {
+      notification.innerHTML = `✨ ${message}`;
+    }
     
     document.body.appendChild(notification);
     
@@ -317,13 +519,18 @@ const FinalAdobePDFViewer = forwardRef(({
         contentDescriptor,
         {
         ...ADOBE_CONFIG.VIEWER_CONFIG,
-        // Enhanced viewer options for navigation
+        // Enhanced viewer options for navigation and text selection
         showPageControls: true,
         showBookmarks: true,
         showThumbnails: true,
         showSearch: true,
         enableFormFilling: false,
-        showAnnotationTools: true
+        showAnnotationTools: true,
+        enableTextSelection: true, // Explicitly enable text selection
+        enableCopyText: true, // Allow copying text
+        disableTextSelection: false, // Make sure text selection is not disabled
+        showSecondaryToolbar: true,
+        showToolbarControl: true
       }
       );
 
@@ -344,31 +551,110 @@ const FinalAdobePDFViewer = forwardRef(({
             console.log('🎯 Annotation added:', annotation);
           }
         );
+        
+        // Try to register more specific text selection events
+        if (viewer.eventAPI && viewer.eventAPI.callbackAPI.CONTENT_CHANGE) {
+          await viewer.registerCallback(
+            viewer.eventAPI.callbackAPI.CONTENT_CHANGE,
+            async function(event) {
+              console.log('📝 PDF content change detected:', event);
+              // Check for text selection after content change
+              setTimeout(async () => {
+                try {
+                  const selectedContent = await apis.getSelectedContent();
+                  if (selectedContent?.data?.length > 0) {
+                    const currentText = selectedContent.data.map(item => item.text || '').join(' ').trim();
+                    if (currentText && currentText.length > 5) {
+                      console.log('🎯 PDF text selected via content change:', currentText);
+                      showTextSelectionActions(currentText, true);
+                    }
+                  }
+                } catch (error) {
+                  console.log('Error checking selection after content change:', error);
+                }
+              }, 100);
+            }
+          );
+        }
+        
       } catch (callbackError) {
         console.log('⚠️ Text selection callbacks not available in this Adobe SDK version');
       }
+
+      // Listen for postMessage events from Adobe iframe (for cross-origin text selection)
+      window.addEventListener('message', (event) => {
+        // Adobe might send text selection events via postMessage
+        if (event.data && typeof event.data === 'object') {
+          if (event.data.type === 'textSelected' || event.data.action === 'textSelected') {
+            console.log('📨 Received text selection message from Adobe iframe:', event.data);
+            const selectedText = event.data.text || event.data.selectedText;
+            if (selectedText && selectedText.length > 5) {
+              console.log('🎯 Adobe iframe text selection:', selectedText);
+              showTextSelectionActions(selectedText, true);
+            }
+          }
+        }
+      });
 
       // Alternative approach: Add a global text selection listener
       document.addEventListener('selectionchange', async () => {
         const selection = window.getSelection();
         const selectedText = selection.toString().trim();
         
-        if (selectedText.length > 10) {
+        console.log('📝 Selection changed:', { 
+          text: selectedText, 
+          length: selectedText.length,
+          rangeCount: selection.rangeCount 
+        });
+        
+        if (selectedText.length > 5) { // Reduced minimum length
           console.log('🎯 Text selected globally:', selectedText);
           
-          // Check if the selection is within our PDF viewer
+          // Check if the selection is within our PDF viewer - improved detection
           const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
           const container = range ? range.commonAncestorContainer : null;
           
-          if (container && (
-            document.getElementById('adobe-dc-view')?.contains(container) ||
-            container.closest?.('#adobe-dc-view')
-          )) {
-            console.log('🎯 Text selected in PDF viewer');
-            await handleTextSelection({ text: selectedText });
-            
-            // Show a floating action button for finale features
-            showTextSelectionActions(selectedText);
+          // More comprehensive container detection
+          const adobeContainer = document.getElementById('adobe-dc-view');
+          const isInPDFViewer = container && adobeContainer && (
+            adobeContainer.contains(container) ||
+            container.closest?.('#adobe-dc-view') ||
+            container === adobeContainer ||
+            // Check if any of the range's parent elements are within the PDF viewer
+            (container.nodeType === Node.TEXT_NODE && adobeContainer.contains(container.parentNode)) ||
+            // Check for Adobe's internal iframe or canvas elements
+            container.closest?.('[data-adobe-dc-view]') ||
+            container.closest?.('.adobe-dc-view') ||
+            // Look for Adobe's internal content containers
+            container.closest?.('div[id*="adobe"]') ||
+            container.closest?.('iframe[src*="adobe"]') ||
+            // Check if selection contains any PDF-related text patterns
+            /\b(sub\s*class|super\s*class|inherit|entity|attribute|relationship)\b/i.test(selectedText)
+          );
+          
+          console.log('📍 Selection container detection:', { 
+            container: container?.nodeName || 'unknown',
+            containerType: container?.nodeType,
+            hasAdobeDiv: !!adobeContainer,
+            isInPDFViewer,
+            containerParent: container?.parentNode?.nodeName,
+            containerClass: container?.className || 'no-class',
+            textContent: selectedText.substring(0, 50) + '...'
+          });
+          
+          if (isInPDFViewer) {
+            console.log('🎯 Text selected in PDF viewer - showing actions');
+            showTextSelectionActions(selectedText, true); // Mark as real PDF selection
+          } else {
+            console.log('❌ Text selection not in PDF viewer');
+            // Still show actions if we detect any PDF-related selection
+            if (selectedText && (
+              selectedText.length > 10 || // Longer selections are more likely to be intentional
+              adobeContainer // If Adobe container exists, be more permissive
+            )) {
+              console.log('🎯 Showing actions anyway for substantial text selection');
+              showTextSelectionActions(selectedText, true); // Mark as real PDF selection
+            }
           }
         } else {
           // Hide action button when selection is cleared
@@ -376,33 +662,191 @@ const FinalAdobePDFViewer = forwardRef(({
         }
       });
 
+      // Additional mouseup listener specifically for the PDF container and document
+      const pdfContainer = document.getElementById('adobe-dc-view');
+      
+      // Listen on both the container and the entire document for better detection
+      const handleMouseUp = () => {
+        setTimeout(() => { // Small delay to ensure selection is complete
+          const selection = window.getSelection();
+          const selectedText = selection.toString().trim();
+          
+          console.log('🖱️ Mouseup detected, selected text:', selectedText);
+          
+          if (selectedText.length > 5) {
+            console.log('🎯 Showing text selection actions after mouseup');
+            showTextSelectionActions(selectedText, true); // Mark as real PDF selection
+          }
+        }, 100);
+      };
+      
+      if (pdfContainer) {
+        pdfContainer.addEventListener('mouseup', handleMouseUp);
+      }
+      
+      // Keyboard shortcut for manual text selection (Ctrl+Shift+S or Cmd+Shift+S)
+      const handleKeyboardShortcut = (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'S') {
+          event.preventDefault();
+          const selection = window.getSelection();
+          const selectedText = selection.toString().trim();
+          
+          if (selectedText) {
+            console.log('⌨️ Keyboard shortcut triggered with text:', selectedText);
+            showTextSelectionActions(selectedText, true); // Mark as real PDF selection
+          } else {
+            console.log('⌨️ Keyboard shortcut triggered but no text selected');
+            // Show a notification
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+              position: fixed;
+              top: 20px;
+              left: 50%;
+              transform: translateX(-50%);
+              background: #f59e0b;
+              color: white;
+              padding: 8px 12px;
+              border-radius: 6px;
+              z-index: 10000;
+              font-size: 12px;
+            `;
+            notification.textContent = 'Select text first, then press Ctrl+Shift+S (or Cmd+Shift+S)';
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
+          }
+        }
+      };
+      
+      document.addEventListener('keydown', handleKeyboardShortcut);
+      
+      // Also listen on both the container and the entire document for better detection
+      document.addEventListener('mouseup', () => {
+        setTimeout(() => {
+          const selection = window.getSelection();
+          const selectedText = selection.toString().trim();
+          
+          if (selectedText.length > 10) { // Higher threshold for document-wide detection
+            console.log('🖱️ Document mouseup with substantial text:', selectedText);
+            const adobeContainer = document.getElementById('adobe-dc-view');
+            if (adobeContainer) {
+              showTextSelectionActions(selectedText, true); // Mark as real PDF selection
+            }
+          }
+        }, 150);
+      });
+
       // Also try to use Adobe's getSelectedContent API periodically
       const setupAdobeTextSelection = () => {
         let lastSelectedText = '';
+        let selectionCheckInterval;
+        
         const checkSelection = async () => {
           try {
             if (apis?.getSelectedContent) {
               const selectedContent = await apis.getSelectedContent();
-              if (selectedContent?.data?.length > 0) {
-                const currentText = selectedContent.data.map(item => item.text || '').join(' ').trim();
-                if (currentText && currentText.length > 10 && currentText !== lastSelectedText) {
-                  console.log('🎯 Adobe API text selected:', currentText);
+              console.log('🔍 Adobe getSelectedContent result:', selectedContent);
+              
+              if (selectedContent?.data) {
+                let currentText = '';
+                
+                // Handle different data formats from Adobe API
+                if (typeof selectedContent.data === 'string') {
+                  // Data is already a string
+                  currentText = selectedContent.data.trim();
+                } else if (Array.isArray(selectedContent.data)) {
+                  // Data is an array of objects with text property
+                  currentText = selectedContent.data.map(item => item.text || '').join(' ').trim();
+                } else if (selectedContent.data.text) {
+                  // Data is an object with text property
+                  currentText = selectedContent.data.text.trim();
+                } else {
+                  // Try to convert to string
+                  currentText = String(selectedContent.data).trim();
+                }
+                
+                if (currentText && currentText.length > 5 && currentText !== lastSelectedText) {
+                  console.log('🎯 Adobe API detected PDF text selection:', currentText);
                   lastSelectedText = currentText;
-                  await handleTextSelection({ text: currentText });
-                  showTextSelectionActions(currentText);
+                  
+                  // Show the action menu for the selected text
+                  showTextSelectionActions(currentText, true);
+                  
+                  // Also notify the parent component about the selection
+                  if (onSectionHighlight) {
+                    onSectionHighlight({
+                      selectedText: currentText,
+                      relatedSections: [],
+                      action: 'pdf-selection'
+                    });
+                  }
+                }
+              } else {
+                // Clear actions when no text is selected in PDF
+                if (lastSelectedText) {
+                  console.log('📝 Adobe API: Text selection cleared');
+                  lastSelectedText = '';
+                  hideTextSelectionActions();
                 }
               }
+            } else {
+              console.log('⚠️ Adobe getSelectedContent API not available');
             }
           } catch (error) {
-            // Silent - API might not be available
+            console.log('Error in Adobe text selection check:', error);
           }
         };
         
-        // Check every 2 seconds
-        setInterval(checkSelection, 2000);
+        // Start with very frequent polling for better responsiveness
+        selectionCheckInterval = setInterval(checkSelection, 200); // Check every 200ms
+        
+        // Also set up event listeners on the Adobe container for immediate detection
+        const adobeContainer = document.getElementById('adobe-dc-view');
+        if (adobeContainer) {
+          console.log('🔧 Setting up Adobe container event listeners...');
+          
+          // Listen for mouse events on the Adobe container
+          const handleAdobeEvent = (eventType) => {
+            console.log(`📱 Adobe container ${eventType} event detected`);
+            setTimeout(() => {
+              checkSelection();
+            }, 150); // Small delay to ensure selection is complete
+          };
+          
+          adobeContainer.addEventListener('mouseup', () => handleAdobeEvent('mouseup'));
+          adobeContainer.addEventListener('click', () => handleAdobeEvent('click'));
+          adobeContainer.addEventListener('touchend', () => handleAdobeEvent('touchend'));
+          
+          // Also try to listen on all child elements
+          const observer = new MutationObserver(() => {
+            const iframes = adobeContainer.querySelectorAll('iframe');
+            iframes.forEach((iframe, index) => {
+              console.log(`🖼️ Found Adobe iframe ${index}`);
+              try {
+                // Try to access iframe content (will fail for cross-origin)
+                iframe.addEventListener('load', () => {
+                  console.log(`📄 Adobe iframe ${index} loaded`);
+                  setTimeout(checkSelection, 500);
+                });
+              } catch (e) {
+                console.log(`🔒 Cannot access iframe ${index} (cross-origin)`);
+              }
+            });
+          });
+          
+          observer.observe(adobeContainer, { childList: true, subtree: true });
+          
+          console.log('📎 Added enhanced Adobe PDF text selection listeners');
+        }
+        
+        return () => {
+          if (selectionCheckInterval) {
+            clearInterval(selectionCheckInterval);
+          }
+        };
       };
       
-      setTimeout(setupAdobeTextSelection, 3000);
+      // Wait longer for Adobe to fully initialize, then start text selection monitoring
+      setTimeout(setupAdobeTextSelection, 5000);
 
       // Add page change listener
       try {
@@ -451,6 +895,60 @@ const FinalAdobePDFViewer = forwardRef(({
     };
   }, [selectedDocument]);
 
+  // Test Adobe's getSelectedContent API directly
+  const testAdobeSelection = async () => {
+    console.log('🧪 Testing Adobe getSelectedContent API...');
+    try {
+      if (adobeAPIs?.getSelectedContent) {
+        const selectedContent = await adobeAPIs.getSelectedContent();
+        console.log('📋 Adobe getSelectedContent result:', selectedContent);
+        
+        if (selectedContent?.data) {
+          let currentText = '';
+          
+          // Handle different data formats from Adobe API
+          if (typeof selectedContent.data === 'string') {
+            // Data is already a string
+            currentText = selectedContent.data.trim();
+          } else if (Array.isArray(selectedContent.data)) {
+            // Data is an array of objects with text property
+            currentText = selectedContent.data.map(item => item.text || '').join(' ').trim();
+          } else if (selectedContent.data.text) {
+            // Data is an object with text property
+            currentText = selectedContent.data.text.trim();
+          } else {
+            // Try to convert to string
+            currentText = String(selectedContent.data).trim();
+          }
+          
+          console.log('✅ Successfully got text from Adobe API:', currentText);
+          if (currentText && currentText.length > 5) {
+            showTextSelectionActions(currentText, true);
+            showTextSelectionNotification(`Adobe API found: "${currentText.substring(0, 50)}..."`);
+          } else {
+            showTextSelectionNotification('Adobe API returned empty text');
+          }
+        } else {
+          showTextSelectionNotification('No text selected in PDF - please select some text first');
+          console.log('📝 Adobe API: No text currently selected');
+        }
+      } else {
+        console.log('❌ Adobe getSelectedContent API not available');
+        showTextSelectionNotification('Adobe text selection API not available');
+      }
+    } catch (error) {
+      console.error('❌ Error testing Adobe selection:', error);
+      showTextSelectionNotification('Error accessing Adobe text selection API');
+    }
+  };
+
+  // Test text selection functionality
+  const testTextSelection = () => {
+    const testText = "This is a test selection to verify the text selection functionality works correctly.";
+    console.log('🧪 Testing text selection with sample text:', testText);
+    showTextSelectionActions(testText);
+  };
+
   // Show placeholder when no document is selected
   if (!selectedDocument) {
     return (
@@ -476,6 +974,24 @@ const FinalAdobePDFViewer = forwardRef(({
   // Always render the container to ensure the divId exists when document is selected
   return (
     <div className={`relative h-full w-full ${className}`}>
+            {/* Test Button and Instructions for Text Selection */}
+      <div className="absolute top-2 right-2 z-50 space-y-2">
+        <button
+          onClick={testAdobeSelection}
+          className="px-3 py-1 bg-purple-600 text-white text-xs rounded hover:bg-purple-700 transition-colors"
+          title="Test Adobe PDF text selection API"
+        >
+          🔍 Get PDF Selection
+        </button>
+        <button
+          onClick={testTextSelection}
+          className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+          title="Test Text Selection Menu"
+        >
+          🧪 Test Selection
+        </button>
+      </div>
+      
       <div 
         id="adobe-dc-view" 
         ref={viewerRef}

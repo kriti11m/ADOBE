@@ -131,26 +131,7 @@ async def root():
         </html>
         """, status_code=200)
 
-@app.get("/health")
-async def health_check():
-    """Health check endpoint for Docker and monitoring"""
-    return {
-        "status": "healthy",
-        "service": "Adobe Contest Backend",
-        "features": {
-            "text_selection": True,
-            "cross_document_search": True,
-            "insights_bulb": True,
-            "audio_overview": True
-        },
-        "environment": {
-            "llm_provider": os.getenv("LLM_PROVIDER", "gemini"),
-            "tts_provider": os.getenv("TTS_PROVIDER", "azure"),
-            "adobe_api_configured": bool(os.getenv("ADOBE_EMBED_API_KEY"))
-        },
-        "bonus_points": 10,
-        "ready_for_demo": True
-    }
+# Removed duplicate health check endpoint
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8083)
