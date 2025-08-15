@@ -2,6 +2,7 @@
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 python-multipart>=0.0.6
+requests>=2.31.0
 
 # From ADOBE1A (PDF Structure Extractor)
 pdfplumber>=0.10.0
@@ -17,13 +18,32 @@ sentence-transformers>=2.2.2
 # AI Insights Generation (Gemini 2.5 Flash)
 google-generativeai>=0.3.0
 
-# Text-to-Speech
+# Text-to-Speech and Audio Generation for finale
 pyttsx3>=2.90
-gtts>=2.3.0
+gTTS>=2.3.0
+
+# Cross-document semantic search for finale
+sentence-transformers>=2.2.2
+numpy>=1.24.0
+scikit-learn>=1.3.0
+
+# Database management
+SQLAlchemy>=2.0.23
+alembic>=1.13.0
 speechrecognition>=3.10.0
 
 # Environment variables
 python-dotenv>=1.0.0
+
+# LangChain dependencies for LLM integration (contest requirements)
+langchain>=0.1.0
+langchain-openai>=0.1.0
+langchain-google-genai>=1.0.0
+langchain-community>=0.1.0
+
+# Azure TTS dependencies (contest requirements)
+azure-cognitiveservices-speech>=1.34.0
+google-cloud-texttospeech>=2.16.0
 
 # Common dependencies
 numpy>=1.26.0

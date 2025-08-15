@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'http://localhost:8083';
 
 class CollectionService {
   // Create a new collection

@@ -1,5 +1,5 @@
 // Part 1A Service for PDF Structure Extraction
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8083';
 
 class Part1AService {
   // Extract PDF structure (title, headings, outline)

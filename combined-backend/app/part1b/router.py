@@ -2,22 +2,36 @@ import tempfile
 import os
 import json
 import time
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form, Depends
 from fastapi.responses import JSONResponse
 
 from .pipeline import DocumentAnalysisPipeline
+from .relevance_analyzer import RelevanceAnalyzer
+from ..part1a.pdf_structure_extractor import MultilingualPDFExtractor
 from sqlalchemy.orm import Session
 from ..database.database import get_db
 from ..database.models import PDFDocument
-# history_service removed
+from ..text_selection.service import TextSelectionService
 
 router = APIRouter(prefix="/part1b", tags=["Document Analysis"])
 
+class TextAnalysisRequest(BaseModel):
+    """Request model for text-based analysis"""
+    selected_text: str
+    document_id: Optional[int] = None
+
+class LegacyTextAnalysisRequest(BaseModel):
+    """Request model for legacy text analysis with persona/job"""
+    text: str
+    persona: str = "Researcher"
+    job: str = "Analyze document content and extract relevant sections"
+
 class AnalysisRequest(BaseModel):
-    """Request model for document analysis"""
+    """Request model for document analysis (legacy)"""
     persona: str = "Researcher"
     job: str = "Analyze document content and extract relevant sections"
 
@@ -262,3 +276,256 @@ async def get_sample_personas():
             }
         ]
     }
+
+class TextAnalysisRequest(BaseModel):
+    """Request model for direct text analysis"""
+    text: str
+    persona: str = "Researcher"
+    job: str = "Analyze content and extract key information"
+
+@router.post("/analyze-text")
+async def analyze_text(request: LegacyTextAnalysisRequest) -> Dict[str, Any]:
+    """
+    Analyze text directly without PDF processing - Enhanced with Gemini LLM
+    Perfect for testing the analysis pipeline with sample text
+    """
+    try:
+        # Initialize the pipeline
+        pipeline = DocumentAnalysisPipeline()
+        
+        # Create a mock document structure from the text
+        mock_sections = [
+            {
+                "text": request.text,
+                "content": request.text,  # Add both for compatibility
+                "page": 1,
+                "section_title": "Direct Text Input",
+                "section_type": "direct_input",
+                "document": "text_input",
+                "metadata": {
+                    "source": "text_input",
+                    "length": len(request.text)
+                }
+            }
+        ]
+        
+        start_time = time.time()
+        
+        # Process the text through the analysis pipeline with Gemini enhancement
+        if pipeline.relevance_analyzer:
+            print(f"🚀 Analyzing text with Gemini LLM enhancement...")
+            print(f"   Persona: {request.persona}")
+            print(f"   Job: {request.job}")
+            print(f"   Text length: {len(request.text)} characters")
+            
+            # Use the enhanced relevance analyzer (now with Gemini)
+            ranked_sections = pipeline.relevance_analyzer.rank_sections(
+                sections=mock_sections,
+                persona=request.persona,
+                job=request.job
+            )
+            
+            analyzed_sections = {
+                "top_sections": [
+                    {
+                        "text": section["text"][:1000] + ("..." if len(section["text"]) > 1000 else ""),
+                        "relevance_score": section.get("relevance_score", 0.0),
+                        "page": section.get("page", 1),
+                        "section_title": section.get("section_title", ""),
+                        "importance_rank": section.get("importance_rank", 1),
+                        "gemini_analysis": section.get("gemini_analysis", {}),
+                        "reasoning": section.get("gemini_analysis", {}).get("reasoning", "Standard analysis")
+                    } for section in ranked_sections[:5]  # Top 5 sections
+                ],
+                "analysis_metadata": {
+                    "total_sections": len(ranked_sections),
+                    "processing_time": time.time() - start_time,
+                    "analyzer_status": "gemini_enhanced" if ranked_sections and ranked_sections[0].get("gemini_analysis") else "fallback_mode",
+                    "gemini_enabled": pipeline.relevance_analyzer.use_gemini_enhancement
+                }
+            }
+        else:
+            # Fallback: just return the input with basic analysis
+            analyzed_sections = {
+                "top_sections": [
+                    {
+                        "text": request.text[:1000] + ("..." if len(request.text) > 1000 else ""),
+                        "relevance_score": 0.8,
+                        "page": 1,
+                        "reasoning": "Direct text input - no ranking performed (analyzer unavailable)"
+                    }
+                ],
+                "analysis_metadata": {
+                    "total_sections": 1,
+                    "processing_time": time.time() - start_time,
+                    "analyzer_status": "fallback_mode",
+                    "gemini_enabled": False
+                }
+            }
+        
+        processing_time = time.time() - start_time
+        
+        return {
+            "success": True,
+            "metadata": {
+                "persona": request.persona,
+                "job": request.job,
+                "text_length": len(request.text),
+                "processing_time": processing_time,
+                "timestamp": datetime.now().isoformat(),
+                "gemini_enhanced": analyzed_sections["analysis_metadata"].get("gemini_enabled", False)
+            },
+            "analysis_results": analyzed_sections,
+            "input_preview": request.text[:200] + ("..." if len(request.text) > 200 else "")
+        }
+    except Exception as e:
+        print(f"❌ Text analysis failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Text analysis failed: {str(e)}"
+        )
+        
+    except Exception as e:
+        print(f"❌ Text analysis failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Text analysis failed: {str(e)}"
+        )
+
+@router.post("/find-relevant-sections")
+async def find_relevant_sections(
+    request: TextAnalysisRequest,
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    NEW FINALE ENDPOINT: Find relevant sections based on selected text
+    Uses: Part 1A for section detection + Gemini for relevance + Sentence transformers as fallback
+    Input: Selected text from PDF
+    Output: Top 5 relevant sections with 2-3 sentence snippets
+    """
+    start_time = time.time()
+    
+    try:
+        print(f"🚀 Finding relevant sections for selected text: {request.selected_text[:100]}...")
+        
+        # Initialize services
+        relevance_analyzer = RelevanceAnalyzer()
+        text_service = TextSelectionService()
+        
+        # Get all PDF documents from database for cross-document search
+        documents = db.query(PDFDocument).all()
+        
+        if not documents:
+            return {
+                "success": False,
+                "error": "No documents found. Please upload a PDF first.",
+                "relevant_sections": []
+            }
+        
+        print(f"📚 Searching across {len(documents)} documents...")
+        
+        all_sections = []
+        
+        # Process each document to extract sections using Part 1A
+        for doc in documents:
+            try:
+                if not doc.file_path or not os.path.exists(doc.file_path):
+                    continue
+                    
+                print(f"📄 Processing document: {doc.original_filename}")
+                
+                # Use Part 1A PDF Structure Extractor for section detection
+                extractor = MultilingualPDFExtractor()
+                sections = extractor.extract_sections_from_pdf(doc.file_path)
+                
+                # Convert sections to format compatible with relevance analyzer
+                for section in sections:
+                    processed_section = {
+                        'content': section.get('content', ''),
+                        'section_title': section.get('title', 'Untitled Section'),
+                        'document_name': doc.original_filename,
+                        'document_id': doc.id,
+                        'page': section.get('page', 'Unknown'),
+                        'metadata': {
+                            'extracted_by': 'part1a',
+                            'section_type': section.get('type', 'content')
+                        }
+                    }
+                    
+                    if len(processed_section['content']) > 50:  # Filter out very short sections
+                        all_sections.append(processed_section)
+                        
+            except Exception as e:
+                print(f"⚠️ Error processing document {doc.original_filename}: {e}")
+                continue
+        
+        if not all_sections:
+            return {
+                "success": False,
+                "error": "No content sections found in uploaded documents",
+                "relevant_sections": []
+            }
+        
+        print(f"🔍 Found {len(all_sections)} sections across all documents")
+        
+        # Calculate relevance scores for each section using Gemini + sentence transformers
+        scored_sections = []
+        
+        for section in all_sections:
+            try:
+                # Use the enhanced relevance analyzer with Gemini + semantic fallback
+                relevance_score = relevance_analyzer.calculate_text_similarity_score(
+                    section, request.selected_text
+                )
+                
+                # Create snippet (2-3 sentences from the section)
+                content = section['content']
+                sentences = content.split('. ')
+                snippet = '. '.join(sentences[:3]) + ('.' if len(sentences) > 3 else '')
+                
+                scored_section = {
+                    'section_title': section['section_title'],
+                    'document_name': section['document_name'],
+                    'document_id': section['document_id'],
+                    'page': section['page'],
+                    'relevance_score': relevance_score,
+                    'snippet': snippet,
+                    'content_preview': content[:200] + ('...' if len(content) > 200 else ''),
+                    'enhanced_analysis': section.get('gemini_analysis', {}),
+                    'metadata': section.get('metadata', {})
+                }
+                
+                scored_sections.append(scored_section)
+                
+            except Exception as e:
+                print(f"⚠️ Error scoring section '{section['section_title']}': {e}")
+                continue
+        
+        # Sort by relevance score (highest first) and take top 5
+        scored_sections.sort(key=lambda x: x['relevance_score'], reverse=True)
+        top_sections = scored_sections[:5]
+        
+        processing_time = time.time() - start_time
+        
+        return {
+            "success": True,
+            "selected_text": request.selected_text,
+            "selected_text_preview": request.selected_text[:100] + ('...' if len(request.selected_text) > 100 else ''),
+            "total_sections_analyzed": len(all_sections),
+            "relevant_sections": top_sections,
+            "metadata": {
+                "processing_time": processing_time,
+                "timestamp": datetime.now().isoformat(),
+                "documents_searched": len(documents),
+                "analysis_method": "gemini_enhanced_with_semantic_fallback",
+                "top_sections_count": len(top_sections)
+            }
+        }
+        
+    except Exception as e:
+        print(f"❌ Error in find_relevant_sections: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "relevant_sections": []
+        }

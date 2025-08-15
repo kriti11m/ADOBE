@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { ADOBE_CONFIG } from '../config/adobe';
 import collectionService from '../services/collectionService';
+import backendService from '../services/backendService';
 
 const FinalAdobePDFViewer = forwardRef(({ 
   selectedDocument, 
@@ -99,6 +100,160 @@ const FinalAdobePDFViewer = forwardRef(({
     }
   };
 
+  // Handle text selection for finale functionality
+  const handleTextSelection = async (selectedTextData) => {
+    try {
+      console.log('🎯 Processing text selection for finale features...');
+      
+      if (!selectedTextData || !selectedTextData.text) {
+        console.warn('⚠️ No text selected');
+        return;
+      }
+
+      const selectedText = selectedTextData.text.trim();
+      if (selectedText.length < 10) {
+        console.warn('⚠️ Selected text too short for analysis');
+        return;
+      }
+
+      console.log('📝 Selected text:', selectedText);
+
+      // Call the finale text selection service
+      const relatedSections = await backendService.findRelatedSections({
+        selectedText: selectedText,
+        documentId: selectedDocument.id,
+        documentName: selectedDocument.name
+      });
+
+      console.log('🔍 Found related sections:', relatedSections);
+
+      // Notify parent component about text selection
+      if (onSectionHighlight) {
+        onSectionHighlight({
+          selectedText: selectedText,
+          relatedSections: relatedSections,
+          sourceDocument: selectedDocument
+        });
+      }
+
+      // Show a temporary notification to user
+      showTextSelectionNotification(relatedSections.length);
+
+    } catch (error) {
+      console.error('❌ Error processing text selection:', error);
+    }
+  };
+
+  // Show floating action button for text selection
+  const showTextSelectionActions = (selectedText) => {
+    // Remove existing button if present
+    hideTextSelectionActions();
+    
+    const actionButton = document.createElement('div');
+    actionButton.id = 'finale-text-selection-action';
+    actionButton.style.cssText = `
+      position: fixed;
+      top: 100px;
+      right: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 12px 16px;
+      border-radius: 12px;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+      z-index: 10000;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.3s ease;
+      border: none;
+      max-width: 280px;
+    `;
+    
+    actionButton.innerHTML = `
+      <span style="font-size: 18px;">🔍</span>
+      <span>Find Related Sections</span>
+    `;
+    
+    actionButton.onclick = async () => {
+      console.log('🎯 Finale text selection action clicked');
+      actionButton.style.opacity = '0.7';
+      actionButton.innerHTML = '<span>⏳</span><span>Searching...</span>';
+      
+      try {
+        // This will trigger the related sections search
+        await handleTextSelection({ text: selectedText });
+        
+        actionButton.innerHTML = '<span>✅</span><span>Found sections!</span>';
+        setTimeout(() => {
+          hideTextSelectionActions();
+        }, 2000);
+        
+      } catch (error) {
+        actionButton.innerHTML = '<span>❌</span><span>Error occurred</span>';
+        setTimeout(() => {
+          hideTextSelectionActions();
+        }, 3000);
+      }
+    };
+    
+    // Add hover effects
+    actionButton.onmouseenter = () => {
+      actionButton.style.transform = 'translateY(-2px)';
+      actionButton.style.boxShadow = '0 12px 30px rgba(0,0,0,0.2)';
+    };
+    
+    actionButton.onmouseleave = () => {
+      actionButton.style.transform = 'translateY(0)';
+      actionButton.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)';
+    };
+    
+    document.body.appendChild(actionButton);
+    
+    // Auto-hide after 10 seconds
+    setTimeout(() => {
+      hideTextSelectionActions();
+    }, 10000);
+  };
+
+  // Hide text selection action button
+  const hideTextSelectionActions = () => {
+    const existingButton = document.getElementById('finale-text-selection-action');
+    if (existingButton) {
+      existingButton.remove();
+    }
+  };
+
+  // Show notification for text selection
+  const showTextSelectionNotification = (relatedCount) => {
+    // Create a temporary notification
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #4F46E5;
+      color: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 10000;
+      font-size: 14px;
+      font-weight: 500;
+    `;
+    notification.innerHTML = `🔍 Found ${relatedCount} related sections`;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 3000);
+  };
+
   // Initialize Adobe PDF viewer
   const initializeAdobePDF = async () => {
     if (!selectedDocument) {
@@ -180,6 +335,87 @@ const FinalAdobePDFViewer = forwardRef(({
       console.log('✅ Adobe PDF viewer fully loaded and ready');
       console.log('🎯 Available navigation methods:', Object.keys(apis));
 
+      // Add text selection event listener for finale functionality
+      try {
+        // Register callback for text selection events
+        await viewer.registerCallback(
+          viewer.eventAPI.callbackAPI.TEXT_SELECTOR_API.ANNOTATION_ADDED,
+          function(annotation) {
+            console.log('🎯 Annotation added:', annotation);
+          }
+        );
+      } catch (callbackError) {
+        console.log('⚠️ Text selection callbacks not available in this Adobe SDK version');
+      }
+
+      // Alternative approach: Add a global text selection listener
+      document.addEventListener('selectionchange', async () => {
+        const selection = window.getSelection();
+        const selectedText = selection.toString().trim();
+        
+        if (selectedText.length > 10) {
+          console.log('🎯 Text selected globally:', selectedText);
+          
+          // Check if the selection is within our PDF viewer
+          const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+          const container = range ? range.commonAncestorContainer : null;
+          
+          if (container && (
+            document.getElementById('adobe-dc-view')?.contains(container) ||
+            container.closest?.('#adobe-dc-view')
+          )) {
+            console.log('🎯 Text selected in PDF viewer');
+            await handleTextSelection({ text: selectedText });
+            
+            // Show a floating action button for finale features
+            showTextSelectionActions(selectedText);
+          }
+        } else {
+          // Hide action button when selection is cleared
+          hideTextSelectionActions();
+        }
+      });
+
+      // Also try to use Adobe's getSelectedContent API periodically
+      const setupAdobeTextSelection = () => {
+        let lastSelectedText = '';
+        const checkSelection = async () => {
+          try {
+            if (apis?.getSelectedContent) {
+              const selectedContent = await apis.getSelectedContent();
+              if (selectedContent?.data?.length > 0) {
+                const currentText = selectedContent.data.map(item => item.text || '').join(' ').trim();
+                if (currentText && currentText.length > 10 && currentText !== lastSelectedText) {
+                  console.log('🎯 Adobe API text selected:', currentText);
+                  lastSelectedText = currentText;
+                  await handleTextSelection({ text: currentText });
+                  showTextSelectionActions(currentText);
+                }
+              }
+            }
+          } catch (error) {
+            // Silent - API might not be available
+          }
+        };
+        
+        // Check every 2 seconds
+        setInterval(checkSelection, 2000);
+      };
+      
+      setTimeout(setupAdobeTextSelection, 3000);
+
+      // Add page change listener
+      try {
+        await viewer.registerCallback(
+          viewer.eventAPI.callbackAPI.PAGE_API.PAGE_CHANGED,
+          function(pageInfo) {
+            console.log('📄 Page changed:', pageInfo);
+          }
+        );
+      } catch (callbackError) {
+        console.log('⚠️ Page change callbacks not available');
+      }
+
       // Store the APIs for navigation
       viewerInstanceRef.current = viewer;
       setAdobeAPIs(apis);
@@ -191,6 +427,14 @@ const FinalAdobePDFViewer = forwardRef(({
       setError('Failed to load PDF viewer. Please try again.');
       setIsLoading(false);
     }
+  };
+
+  // Test function for finale features - can be triggered manually
+  const testFinaleFeatures = async () => {
+    console.log('🧪 Testing finale features manually...');
+    const testText = "Adobe Acrobat's generative AI features revolutionize document workflows";
+    await handleTextSelection({ text: testText });
+    showTextSelectionActions(testText);
   };
 
   // (Removed document auto-loading helpers to revert to original simple approach)
@@ -238,6 +482,18 @@ const FinalAdobePDFViewer = forwardRef(({
         className="h-full w-full"
         style={{ minHeight: '600px' }}
       />
+      
+      {/* Test Button for Finale Features */}
+      {viewerReady && !isLoading && !error && (
+        <button
+          onClick={testFinaleFeatures}
+          className="absolute top-4 left-4 z-50 bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded-lg text-sm font-medium shadow-lg transition-all duration-200"
+          title="Test Finale Features - Simulates text selection"
+        >
+          🧪 Test Text Selection
+        </button>
+      )}
+      
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80 dark:bg-gray-800/80">
           <div className="text-center">

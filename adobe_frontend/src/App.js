@@ -6,13 +6,26 @@ import Navigation from './components/Navigation';
 import DocumentSidebar from './components/DocumentSidebar';
 import DocumentOutline from './components/DocumentOutline';
 import FinalAdobePDFViewer from './components/FinalAdobePDFViewer';
-import RightSidebar from './components/RightSidebar';
 import PDFUploader from './components/PDFUploader';
 import CollectionUploader from './components/CollectionUploader';
-import { Headphones, FileText } from 'lucide-react';
+import { Headphones, FileText, Lightbulb, Sparkles, Brain, Zap } from 'lucide-react';
 import backendService from './services/backendService';
 import part1aService from './services/part1aService';
 import documentService from './services/documentService';
+
+// Simple Card component
+const Card = ({ children, className }) => (
+  <div className={`rounded-2xl border ${className}`}>
+    {children}
+  </div>
+);
+
+// Simple Button component
+const Button = ({ children, className, ...props }) => (
+  <button className={`${className}`} {...props}>
+    {children}
+  </button>
+);
 
 // Create Dark Mode Context
 export const DarkModeContext = createContext();
@@ -55,6 +68,10 @@ function App() {
   const [audioUrl, setAudioUrl] = useState(null);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [availableTTSEngines, setAvailableTTSEngines] = useState(null);
+  
+  // Finale text selection features
+  const [selectedTextData, setSelectedTextData] = useState(null);
+  const [relatedSections, setRelatedSections] = useState([]);
   
   // Part 1A Integration - Document Structure
   const [pdfStructure, setPdfStructure] = useState(null);
@@ -193,6 +210,13 @@ function App() {
     setTimeout(() => {
       setTutorialHighlightedComponent(null);
     }, 5000);
+  };
+
+  // Handler for updating recommendations from text-based analysis
+  const handleUpdateRecommendations = (newRecommendations) => {
+    console.log('🔄 Updating recommendations with text-based analysis results:', newRecommendations.length);
+    setRecommendations(newRecommendations);
+    setIsProcessing(false); // Ensure processing state is cleared
   };
 
   const handleOnboardingComplete = (userProfile) => {
@@ -345,6 +369,23 @@ function App() {
     // Backend analysis should only happen when Smart Connections is clicked
   };
 
+  // Finale text selection handler
+  const handleTextSelection = async (selectionData) => {
+    try {
+      console.log('🎯 Text selection event received:', selectionData);
+      
+      setSelectedTextData(selectionData);
+      setRelatedSections(selectionData.relatedSections || []);
+      
+      // Optional: Auto-switch to Documents tab to show related sections
+      // You can uncomment this if you want automatic tab switching
+      // setActiveTab('documents');
+      
+    } catch (error) {
+      console.error('❌ Error handling text selection:', error);
+    }
+  };
+
   const handleGetRecommendations = async (document, section = null) => {
     // If we have an active collection, analyze all PDFs in the collection
     if (activeCollection && activeCollection.documents.length > 0) {
@@ -362,7 +403,7 @@ function App() {
         if (activeCollection.fromDatabase && activeCollection.dbCollectionId) {
           // Use the new collection analysis endpoint
           console.log(`🗃️ Analyzing database collection "${activeCollection.name}" (ID: ${activeCollection.dbCollectionId})`);
-          result = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/part1b/analyze-collection`, {
+          result = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8083'}/part1b/analyze-collection`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded',
@@ -980,25 +1021,68 @@ function App() {
                 highlightedSections={highlightedSections}
                 onDocumentLoad={handleDocumentLoad}
                 onSectionSelect={handleSectionSelect}
-                onSectionHighlight={(page) => console.log('Highlighted page:', page)}
+                onSectionHighlight={handleTextSelection}
               />
             </div>
 
-            <RightSidebar 
-              id="right-sidebar"
-              currentDocument={currentDocument}
-              recommendations={recommendations}
-              currentSessionId={currentSessionId}
-              isProcessing={isProcessing}
-              onGetRecommendations={handleGetRecommendations}
-              activeCollection={activeCollection}
-              onNavigateToSection={handleNavigateToSection}
-              pdfStructure={pdfStructure}
-              isExtractingStructure={isExtractingStructure}
-              currentSection={currentSection}
-              userProfile={userProfile}
-              tutorialHighlightedComponent={tutorialHighlightedComponent}
-            />
+            {/* Right Sidebar */}
+            <div className="w-80 border-l border-gray-200/60 backdrop-blur-xl bg-white/60 p-6 shadow-sm">
+              <div className="space-y-6">
+                {/* Smart Connections */}
+                <Card className="bg-gradient-to-br from-yellow-100 to-orange-100 border-yellow-300/40 backdrop-blur-sm shadow-lg">
+                  <div className="p-6 text-center">
+                    <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-2xl flex items-center justify-center shadow-lg shadow-yellow-500/25">
+                      <Lightbulb className="w-8 h-8 text-white animate-pulse" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Smart Connections</h3>
+                    <p className="text-gray-700 text-sm mb-4 leading-relaxed">
+                      Create a collection or select a document to discover relevant sections
+                    </p>
+                    <div className="flex items-center justify-center gap-2 text-yellow-600 text-xs">
+                      <Sparkles className="w-3 h-3" />
+                      <span>AI-Powered Analysis</span>
+                      <Sparkles className="w-3 h-3" />
+                    </div>
+                  </div>
+                </Card>
+
+                {/* AI Features */}
+                <Card className="bg-gradient-to-br from-purple-100 to-pink-100 border-purple-300/40 backdrop-blur-sm shadow-lg">
+                  <div className="p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
+                        <Brain className="w-5 h-5 text-white" />
+                      </div>
+                      <h3 className="text-base font-semibold text-gray-900">AI Assistant</h3>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-gray-700 text-sm">
+                        <Zap className="w-3 h-3 text-purple-500" />
+                        <span>Document Summarization</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-gray-700 text-sm">
+                        <Zap className="w-3 h-3 text-pink-500" />
+                        <span>Key Insights Extraction</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-gray-700 text-sm">
+                        <Zap className="w-3 h-3 text-cyan-500" />
+                        <span>Cross-Document Analysis</span>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Podcast Mode */}
+                <Button className="w-full bg-gradient-to-r from-gray-200 to-gray-300 hover:from-gray-300 hover:to-gray-400 text-gray-800 py-4 rounded-2xl shadow-lg transition-all duration-300 hover:shadow-xl hover:scale-105">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-gray-400/30 rounded-full flex items-center justify-center">
+                      <div className="w-3 h-3 bg-gray-600 rounded-full animate-pulse"></div>
+                    </div>
+                    <span className="font-medium">Podcast Mode</span>
+                  </div>
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
 

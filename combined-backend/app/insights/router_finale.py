@@ -1,7 +1,6 @@
 """
-Insights Router for Adobe Hackathon Finale - Contest Edition
+Insights Router for Adobe Hackathon Finale
 Implements Insights Bulb (+5 points) and Audio Overview/Podcast Mode (+5 points)
-Integrates with contest LLM providers (Gemini, Ollama, etc.)
 """
 
 import os
@@ -13,30 +12,9 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-# Import unified LLM service for contest compatibility
-from ..services.llm_service import llm_service
-
-# Import TTS service
-try:
-    from ..services.tts_service import tts_service
-except ImportError:
-    print("Warning: TTS service not found, audio features may be limited")
-    tts_service = None
-
-# Import insights bulb service
-try:
-    from .bulb_service import insights_bulb_service
-except ImportError:
-    print("Warning: Insights bulb service not found")
-    insights_bulb_service = None
-
-# Fallback to Gemini generator if available
-try:
-    from .gemini_generator import GeminiInsightsGenerator
-    gemini_generator = GeminiInsightsGenerator()
-except Exception as e:
-    print(f"Warning: Gemini generator not available: {e}")
-    gemini_generator = None
+from .gemini_generator import GeminiInsightsGenerator
+from ..services.tts_service import tts_service
+from .bulb_service import insights_bulb_service
 
 # Create router
 router = APIRouter(prefix="/insights", tags=["insights"])
@@ -66,7 +44,6 @@ async def generate_insights_bulb(request: InsightsBulbRequest):
     """
     Bonus Feature: Insights Bulb (+5 points)
     Generate AI-powered insights for selected text and related sections
-    Uses contest-compliant LLM providers (Gemini, Ollama, etc.)
     """
     try:
         if not request.selected_text or len(request.selected_text.strip()) < 10:
@@ -75,31 +52,12 @@ async def generate_insights_bulb(request: InsightsBulbRequest):
                 detail="Selected text must be at least 10 characters long"
             )
         
-        # Use unified LLM service for contest compatibility
-        insights_text = llm_service.generate_related_content_insights(
+        # Generate insights using the bulb service
+        insights = insights_bulb_service.generate_insights_for_selection(
             selected_text=request.selected_text,
-            related_sections=request.related_sections
+            related_sections=request.related_sections,
+            insight_types=request.insight_types
         )
-        
-        # Structure the insights response
-        insights = {
-            "analysis": insights_text,
-            "selected_text_summary": request.selected_text[:200] + "...",
-            "related_sections_count": len(request.related_sections),
-            "insight_types": request.insight_types,
-            "generated_with": f"{llm_service.provider} ({llm_service.model_name})"
-        }
-        
-        # Fallback to bulb service if available
-        if insights_bulb_service and not insights_text:
-            try:
-                insights = insights_bulb_service.generate_insights_for_selection(
-                    selected_text=request.selected_text,
-                    related_sections=request.related_sections,
-                    insight_types=request.insight_types
-                )
-            except Exception as fallback_error:
-                print(f"Bulb service fallback failed: {fallback_error}")
         
         return InsightsResponse(
             success=True,

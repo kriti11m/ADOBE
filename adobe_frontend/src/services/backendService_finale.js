@@ -3,11 +3,10 @@
  * Handles document upload and integrates with finale features
  */
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8083';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
 
 class BackendService {
   constructor() {
-    this.API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8083';
     console.log('🚀 Backend Service initialized for Adobe Hackathon Finale');
   }
 
@@ -38,14 +37,14 @@ class BackendService {
   // Get list of all documents
   async getDocuments() {
     try {
-      const response = await fetch(`${API_BASE_URL}/documents/`);
+      const response = await fetch(`${API_BASE_URL}/documents/list`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const result = await response.json();
-      return result || [];
+      return result.documents || [];
     } catch (error) {
       console.error('❌ Error fetching documents:', error);
       return [];
@@ -192,74 +191,6 @@ class BackendService {
     }
   }
 
-  // NEW: Find relevant sections using Part 1B text-based analysis
-  async findRelevantSections(selectedText, documentId = null) {
-    try {
-      console.log('🚀 Finding relevant sections with Part 1B text analysis...');
-      console.log('   Selected text:', selectedText.substring(0, 100) + '...');
-      
-      const response = await fetch(`${API_BASE_URL}/part1b/find-relevant-sections`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          selected_text: selectedText,
-          document_id: documentId
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to find relevant sections');
-      }
-
-      console.log('✅ Found relevant sections:', data.relevant_sections?.length || 0);
-      console.log('   Top relevance score:', data.relevant_sections?.[0]?.relevance_score || 'N/A');
-      
-      // Transform to match expected format for Smart Connections UI
-      const transformedSections = (data.relevant_sections || []).map((section, index) => ({
-        id: `section-${section.document_id}-${index}`,
-        section: section.section_title,
-        title: section.section_title,
-        document: section.document_name,
-        document_name: section.document_name,
-        page: section.page,
-        relevance: Math.round(section.relevance_score * 100),
-        relevance_score: section.relevance_score,
-        snippet: section.snippet,
-        content_preview: section.content_preview,
-        category: 'Relevant Section',
-        color: section.relevance_score > 0.8 ? 'green' : section.relevance_score > 0.6 ? 'blue' : 'yellow',
-        keyPoints: section.enhanced_analysis?.key_reasons || 
-                  [`Relevance: ${Math.round(section.relevance_score * 100)}%`],
-        metadata: section.metadata || {},
-        enhanced_analysis: section.enhanced_analysis || {}
-      }));
-
-      return {
-        success: true,
-        selectedText: data.selected_text,
-        sections: transformedSections,
-        totalAnalyzed: data.total_sections_analyzed,
-        metadata: data.metadata
-      };
-
-    } catch (error) {
-      console.error('❌ Error finding relevant sections:', error);
-      return {
-        success: false,
-        error: error.message,
-        sections: []
-      };
-    }
-  }
-
   // Generate AI insights using finale insights bulb
   async generateInsightsBulb(selectedText, relatedSections, insightTypes = null) {
     try {
@@ -360,105 +291,6 @@ class BackendService {
       };
     } catch (error) {
       console.error('Error processing files:', error);
-      throw error;
-    }
-  }
-
-  // Get available TTS engines (for legacy compatibility)
-  async getAvailableTTSEngines() {
-    try {
-      // For finale backend, return mock TTS engines info
-      return [
-        { id: 'pyttsx3', name: 'pyttsx3', available: true },
-        { id: 'gtts', name: 'Google TTS', available: true }
-      ];
-    } catch (error) {
-      console.error('Error getting TTS engines:', error);
-      return [
-        { id: 'mock', name: 'Mock TTS', available: true }
-      ];
-    }
-  }
-
-  // Legacy method: Extract PDF structure (for compatibility)
-  async extractStructure(file) {
-    try {
-      // For finale backend, we don't need structure extraction
-      // Return a simple success response
-      return {
-        success: true,
-        message: 'Document ready for text selection',
-        sections: [],
-        pages: 1
-      };
-    } catch (error) {
-      console.error('Error extracting structure:', error);
-      throw error;
-    }
-  }
-
-  // Finale text selection feature - find related sections across documents
-  async findRelatedSections({ selectedText, documentId, documentName }) {
-    try {
-      console.log('🔍 Finding related sections for selected text...');
-      
-      const response = await fetch(`${this.API_BASE}/text-selection/find-related`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          selected_text: selectedText,
-          document_id: documentId,
-          document_name: documentName,
-          limit: 5
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('✅ Related sections found:', data);
-      
-      return data.related_sections || [];
-      
-    } catch (error) {
-      console.error('❌ Error finding related sections:', error);
-      // Return empty array on error to avoid breaking the UI
-      return [];
-    }
-  }
-
-  // Finale insights bulb feature - generate AI insights for selected text
-  async generateInsights({ selectedText, relatedSections, documentContext }) {
-    try {
-      console.log('🧠 Generating AI insights for selected content...');
-      
-      const response = await fetch(`${this.API_BASE}/insights/bulb/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          selected_text: selectedText,
-          related_sections: relatedSections,
-          document_context: documentContext
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('✅ AI insights generated:', data);
-      
-      return data;
-      
-    } catch (error) {
-      console.error('❌ Error generating insights:', error);
       throw error;
     }
   }
