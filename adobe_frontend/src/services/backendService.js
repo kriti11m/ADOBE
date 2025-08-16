@@ -395,7 +395,7 @@ class BackendService {
       }
 
       const data = await response.json();
-      return data.insights;
+      return data; // Return full response object instead of just data.insights
     } catch (error) {
       console.error('Error generating insights:', error);
       throw error;

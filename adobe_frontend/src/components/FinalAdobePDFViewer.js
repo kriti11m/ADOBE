@@ -542,6 +542,36 @@ const FinalAdobePDFViewer = forwardRef(({
       console.log('✅ Adobe PDF viewer fully loaded and ready');
       console.log('🎯 Available navigation methods:', Object.keys(apis));
 
+      // Register feature flag callbacks to prevent console errors
+      try {
+        if (viewer.registerCallback) {
+          // Register feature flag handlers
+          const featureFlags = [
+            'GET_FEATURE_FLAG:enable-tools-multidoc',
+            'GET_FEATURE_FLAG:edit-config', 
+            'GET_FEATURE_FLAG:enable-accessibility',
+            'GET_FEATURE_FLAG:preview-config',
+            'GET_FEATURE_FLAG:enable-inline-organize',
+            'GET_FEATURE_FLAG:enable-pdf-request-signatures',
+            'GET_FEATURE_FLAG:DCWeb_edit_image_experiment'
+          ];
+          
+          featureFlags.forEach(flag => {
+            try {
+              viewer.registerCallback(flag, (flagName) => {
+                // Return default false for all feature flags to suppress errors
+                console.log(`🏁 Feature flag requested: ${flagName} - returning false`);
+                return false;
+              });
+            } catch (e) {
+              console.log(`⚠️ Could not register ${flag}:`, e.message);
+            }
+          });
+        }
+      } catch (flagError) {
+        console.log('⚠️ Feature flag registration not available:', flagError);
+      }
+
       // Add text selection event listener for finale functionality
       try {
         // Register callback for text selection events
@@ -738,6 +768,7 @@ const FinalAdobePDFViewer = forwardRef(({
       // Also try to use Adobe's getSelectedContent API periodically
       const setupAdobeTextSelection = () => {
         let lastSelectedText = '';
+        let isProcessingSelection = false;
         let selectionCheckInterval;
         
         const checkSelection = async () => {
@@ -764,9 +795,10 @@ const FinalAdobePDFViewer = forwardRef(({
                   currentText = String(selectedContent.data).trim();
                 }
                 
-                if (currentText && currentText.length > 5 && currentText !== lastSelectedText) {
+                if (currentText && currentText.length > 5 && currentText !== lastSelectedText && !isProcessingSelection) {
                   console.log('🎯 Adobe API detected PDF text selection:', currentText);
                   lastSelectedText = currentText;
+                  isProcessingSelection = true;
                   
                   // Show the action menu for the selected text
                   showTextSelectionActions(currentText, true);
@@ -779,12 +811,18 @@ const FinalAdobePDFViewer = forwardRef(({
                       action: 'pdf-selection'
                     });
                   }
+                  
+                  // Reset processing flag after a delay
+                  setTimeout(() => {
+                    isProcessingSelection = false;
+                  }, 2000);
                 }
               } else {
                 // Clear actions when no text is selected in PDF
                 if (lastSelectedText) {
                   console.log('📝 Adobe API: Text selection cleared');
                   lastSelectedText = '';
+                  isProcessingSelection = false;
                   hideTextSelectionActions();
                 }
               }
@@ -796,8 +834,8 @@ const FinalAdobePDFViewer = forwardRef(({
           }
         };
         
-        // Start with very frequent polling for better responsiveness
-        selectionCheckInterval = setInterval(checkSelection, 200); // Check every 200ms
+        // Start with less frequent polling to avoid infinite loops
+        selectionCheckInterval = setInterval(checkSelection, 1000); // Check every 1 second instead of 200ms
         
         // Also set up event listeners on the Adobe container for immediate detection
         const adobeContainer = document.getElementById('adobe-dc-view');

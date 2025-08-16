@@ -70,16 +70,35 @@ async def upload_document(
         if not file.filename.lower().endswith('.pdf'):
             raise HTTPException(status_code=400, detail="Only PDF files are allowed")
         
-        # Here you would typically save the file to storage
-        # For now, we'll just create a database record
+        # Create the data directory if it doesn't exist
+        import os
+        import hashlib
+        from datetime import datetime
         
+        data_dir = "data"
+        collections_dir = os.path.join(data_dir, "collections")
+        os.makedirs(collections_dir, exist_ok=True)
+        
+        # Generate unique filename using hash
+        file_content = await file.read()
+        file_hash = hashlib.sha256(file_content).hexdigest()
+        unique_filename = f"{file_hash}_{file.filename}"
+        file_path = os.path.join(collections_dir, unique_filename)
+        
+        # Save the file to disk
+        with open(file_path, "wb") as f:
+            f.write(file_content)
+        
+        # Create database record with file path
         document = PDFDocumentService.create_document(
-            filename=file.filename,
+            filename=unique_filename,
             original_filename=file.filename,
-            file_size=getattr(file, 'size', None),
+            file_path=file_path,
+            file_size=len(file_content),
             title=title or file.filename.replace('.pdf', '')
         )
         
+        print(f"✅ File saved successfully: {file_path}")
         return document
     except HTTPException:
         raise
@@ -144,4 +163,4 @@ async def get_document_stats():
             "total_size_mb": round(total_size / (1024 * 1024), 2) if total_size > 0 else 0
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get statistics: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get statistics: {str(e)}")

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Brain, Sparkles, Lightbulb, BookOpen, Zap, RefreshCw, Copy, X } from 'lucide-react';
 import backendService from '../services/backendService';
 import { useDarkMode } from '../App';
@@ -9,23 +9,27 @@ const AIAssistant = ({ selectedTextData, onClose, show = false }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState(null);
   const [insightTypes, setInsightTypes] = useState(['key_takeaways', 'did_you_know', 'contradictions', 'examples']);
+  const isGeneratingRef = useRef(false);
 
   // Generate insights when component shows and has selected text
   useEffect(() => {
-    if (show && selectedTextData?.selectedText) {
+    if (show && selectedTextData?.selectedText && !isGeneratingRef.current) {
       // Always clear previous insights when new text data comes in
       setInsights(null);
       setError(null);
       
-      if (!isGenerating) {
-        generateInsights();
-      }
+      generateInsights();
     }
-  }, [show, selectedTextData?.selectedText, isGenerating]);
+  }, [show, selectedTextData?.selectedText]);
 
   const generateInsights = async () => {
     if (!selectedTextData?.selectedText) {
       setError('No text selected for analysis');
+      return;
+    }
+
+    if (isGeneratingRef.current) {
+      console.log('🚫 Insights generation already in progress, skipping...');
       return;
     }
 
@@ -36,6 +40,7 @@ const AIAssistant = ({ selectedTextData, onClose, show = false }) => {
     });
 
     setIsGenerating(true);
+    isGeneratingRef.current = true;
     setError(null);
 
     try {
@@ -60,6 +65,7 @@ const AIAssistant = ({ selectedTextData, onClose, show = false }) => {
       setError('Failed to generate insights. Please try again.');
     } finally {
       setIsGenerating(false);
+      isGeneratingRef.current = false;
     }
   };
 

@@ -24,6 +24,11 @@ class TextAnalysisRequest(BaseModel):
     selected_text: str
     document_id: Optional[int] = None
 
+class RelevantSectionsRequest(BaseModel):
+    """Request model for find-relevant-sections endpoint"""
+    text: str
+    document_context: Optional[Dict[str, Any]] = None
+
 class LegacyTextAnalysisRequest(BaseModel):
     """Request model for legacy text analysis with persona/job"""
     text: str
@@ -394,7 +399,7 @@ async def analyze_text(request: LegacyTextAnalysisRequest) -> Dict[str, Any]:
 
 @router.post("/find-relevant-sections")
 async def find_relevant_sections(
-    request: TextAnalysisRequest,
+    request: RelevantSectionsRequest,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -406,14 +411,14 @@ async def find_relevant_sections(
     start_time = time.time()
     
     try:
-        print(f"🚀 Finding relevant sections for selected text: {request.selected_text[:100]}...")
+        print(f"🚀 Finding relevant sections for selected text: {request.text[:100]}...")
         
         # Initialize services
         relevance_analyzer = RelevanceAnalyzer()
         text_service = TextSelectionService()
         
-        # Get all PDF documents from database for cross-document search
-        documents = db.query(PDFDocument).all()
+        # Get all PDF documents from database for cross-document search (only those with valid file paths)
+        documents = db.query(PDFDocument).filter(PDFDocument.file_path.isnot(None)).all()
         
         if not documents:
             return {
@@ -426,37 +431,121 @@ async def find_relevant_sections(
         
         all_sections = []
         
-        # Process each document to extract sections using Part 1A
+        # Process each document to extract text content and use Gemini for intelligent section detection
         for doc in documents:
             try:
-                if not doc.file_path or not os.path.exists(doc.file_path):
+                # Skip documents without valid file paths
+                if not doc.file_path:
+                    print(f"⚠ Skipping document {doc.original_filename} - no file path in database")
+                    continue
+                    
+                if not os.path.exists(doc.file_path):
+                    print(f"⚠ File not found: {doc.file_path}")
                     continue
                     
                 print(f"📄 Processing document: {doc.original_filename}")
                 
-                # Use Part 1A PDF Structure Extractor for section detection
-                extractor = MultilingualPDFExtractor()
-                sections = extractor.extract_sections_from_pdf(doc.file_path)
+                # Extract raw text from PDF using PyMuPDF
+                import fitz  # PyMuPDF
+                pdf_document = fitz.open(doc.file_path)
+                full_text = ""
+                page_texts = {}
                 
-                # Convert sections to format compatible with relevance analyzer
-                for section in sections:
-                    processed_section = {
-                        'content': section.get('content', ''),
-                        'section_title': section.get('title', 'Untitled Section'),
-                        'document_name': doc.original_filename,
-                        'document_id': doc.id,
-                        'page': section.get('page', 'Unknown'),
-                        'metadata': {
-                            'extracted_by': 'part1a',
-                            'section_type': section.get('type', 'content')
-                        }
-                    }
+                for page_num in range(len(pdf_document)):
+                    page = pdf_document.load_page(page_num)
+                    page_text = page.get_text()
+                    page_texts[page_num + 1] = page_text
+                    full_text += f"\n--- Page {page_num + 1} ---\n{page_text}"
+                
+                pdf_document.close()
+                
+                if not full_text.strip():
+                    print(f"⚠ No text extracted from {doc.original_filename}")
+                    continue
+                
+                # Use Gemini API for intelligent section detection and relevance analysis
+                from app.insights.gemini_generator import GeminiInsightsGenerator
+                gemini_generator = GeminiInsightsGenerator()
+                
+                # Prompt Gemini to identify relevant sections based on selected text
+                gemini_prompt = f"""
+                Analyze this PDF document and find sections relevant to the selected text: "{request.text}"
+                
+                Document: {doc.original_filename}
+                Content: {full_text[:8000]}  # Limit to first 8000 chars for API efficiency
+                
+                Task: Identify the top 3 most relevant sections/headings and their content that relate to the selected text.
+                
+                Respond in JSON format:
+                {{
+                    "relevant_sections": [
+                        {{
+                            "section_title": "heading or section title",
+                            "content": "relevant content (2-3 sentences)",
+                            "page": "page number where found",
+                            "relevance_score": 0.85
+                        }}
+                    ]
+                }}
+                """
+                
+                try:
+                    gemini_response = gemini_generator.generate_insights(gemini_prompt)
                     
-                    if len(processed_section['content']) > 50:  # Filter out very short sections
-                        all_sections.append(processed_section)
+                    # Parse Gemini response
+                    import json
+                    if isinstance(gemini_response, str):
+                        # Try to extract JSON from response
+                        json_start = gemini_response.find('{')
+                        json_end = gemini_response.rfind('}') + 1
+                        if json_start != -1 and json_end != -1:
+                            gemini_data = json.loads(gemini_response[json_start:json_end])
+                        else:
+                            # Fallback: create sections from raw text
+                            gemini_data = {"relevant_sections": []}
+                    else:
+                        gemini_data = gemini_response
+                    
+                    # Process Gemini's identified sections
+                    for section in gemini_data.get('relevant_sections', []):
+                        processed_section = {
+                            'content': section.get('content', ''),
+                            'section_title': section.get('section_title', 'Relevant Section'),
+                            'document_name': doc.original_filename,
+                            'document_id': doc.id,
+                            'page': section.get('page', 'Unknown'),
+                            'relevance_score': section.get('relevance_score', 0.5),
+                            'metadata': {
+                                'extracted_by': 'gemini_api',
+                                'analysis_method': 'intelligent_section_detection'
+                            }
+                        }
+                        
+                        if len(processed_section['content']) > 20:
+                            all_sections.append(processed_section)
+                            
+                except Exception as e:
+                    print(f"⚠ Gemini API error for {doc.original_filename}: {e}")
+                    # Fallback: create simple text chunks if Gemini fails
+                    text_chunks = full_text.split('\n\n')[:3]  # Take first 3 paragraphs
+                    for i, chunk in enumerate(text_chunks):
+                        if len(chunk.strip()) > 50:
+                            processed_section = {
+                                'content': chunk.strip()[:300],
+                                'section_title': f"Section {i+1}",
+                                'document_name': doc.original_filename,
+                                'document_id': doc.id,
+                                'page': 'Multiple',
+                                'relevance_score': 0.3,
+                                'metadata': {
+                                    'extracted_by': 'fallback_text_chunks',
+                                    'analysis_method': 'simple_chunking'
+                                }
+                            }
+                            all_sections.append(processed_section)
                         
             except Exception as e:
-                print(f"⚠️ Error processing document {doc.original_filename}: {e}")
+                print(f"⚠ Error processing document {doc.original_filename}: {e}")
                 continue
         
         if not all_sections:
@@ -468,38 +557,35 @@ async def find_relevant_sections(
         
         print(f"🔍 Found {len(all_sections)} sections across all documents")
         
-        # Calculate relevance scores for each section using Gemini + sentence transformers
+        # Use Gemini for final relevance scoring if sections were found
         scored_sections = []
         
-        for section in all_sections:
-            try:
-                # Use the enhanced relevance analyzer with Gemini + semantic fallback
-                relevance_score = relevance_analyzer.calculate_text_similarity_score(
-                    section, request.selected_text
-                )
-                
-                # Create snippet (2-3 sentences from the section)
-                content = section['content']
-                sentences = content.split('. ')
-                snippet = '. '.join(sentences[:3]) + ('.' if len(sentences) > 3 else '')
-                
-                scored_section = {
-                    'section_title': section['section_title'],
-                    'document_name': section['document_name'],
-                    'document_id': section['document_id'],
-                    'page': section['page'],
-                    'relevance_score': relevance_score,
-                    'snippet': snippet,
-                    'content_preview': content[:200] + ('...' if len(content) > 200 else ''),
-                    'enhanced_analysis': section.get('gemini_analysis', {}),
-                    'metadata': section.get('metadata', {})
-                }
-                
-                scored_sections.append(scored_section)
-                
-            except Exception as e:
-                print(f"⚠️ Error scoring section '{section['section_title']}': {e}")
-                continue
+        if all_sections:
+            # Sections already have relevance scores from Gemini, so we just need to format them properly
+            for section in all_sections:
+                try:
+                    # Create snippet (2-3 sentences from the section)
+                    content = section['content']
+                    sentences = content.split('. ')
+                    snippet = '. '.join(sentences[:2]) + ('.' if len(sentences) > 2 else '')
+                    
+                    scored_section = {
+                        'section_title': section['section_title'],
+                        'document_name': section['document_name'],
+                        'document_id': section['document_id'],
+                        'page': section['page'],
+                        'relevance_score': section.get('relevance_score', 0.5),
+                        'snippet': snippet,
+                        'content_preview': content[:150] + ('...' if len(content) > 150 else ''),
+                        'analysis_method': 'gemini_intelligent_detection',
+                        'metadata': section.get('metadata', {})
+                    }
+                    
+                    scored_sections.append(scored_section)
+                    
+                except Exception as e:
+                    print(f"⚠ Error formatting section '{section['section_title']}': {e}")
+                    continue
         
         # Sort by relevance score (highest first) and take top 5
         scored_sections.sort(key=lambda x: x['relevance_score'], reverse=True)
@@ -509,8 +595,8 @@ async def find_relevant_sections(
         
         return {
             "success": True,
-            "selected_text": request.selected_text,
-            "selected_text_preview": request.selected_text[:100] + ('...' if len(request.selected_text) > 100 else ''),
+            "selected_text": request.text,
+            "selected_text_preview": request.text[:100] + ('...' if len(request.text) > 100 else ''),
             "total_sections_analyzed": len(all_sections),
             "relevant_sections": top_sections,
             "metadata": {

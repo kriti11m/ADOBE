@@ -52,6 +52,15 @@ class GeminiInsightsGenerator:
             print("❌ google-generativeai package not installed. Please install it with: pip install google-generativeai")
             raise
     
+    def generate_insights(self, prompt: str) -> str:
+        """Generate insights using Gemini based on the provided prompt"""
+        try:
+            response = self.model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            print(f"❌ Error generating insights: {e}")
+            return ""
+    
     def generate_key_insights(self, sections: List[Dict], persona: str, job: str) -> Dict[str, Any]:
         """Generate key insights from document sections"""
         

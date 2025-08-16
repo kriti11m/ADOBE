@@ -9,6 +9,8 @@ import FinalAdobePDFViewer from './components/FinalAdobePDFViewer';
 import PDFUploader from './components/PDFUploader';
 import CollectionUploader from './components/CollectionUploader';
 import AIAssistant from './components/AIAssistant';
+import SmartConnections from './components/SmartConnections';
+import DocumentManager from './components/DocumentManager';
 import { Headphones, FileText, Lightbulb, Sparkles, Brain, Zap } from 'lucide-react';
 import backendService from './services/backendService';
 import part1aService from './services/part1aService';
@@ -61,6 +63,7 @@ function App() {
   const [collections, setCollections] = useState([]);
   const [activeCollection, setActiveCollection] = useState(null);
   const [showCollectionUploader, setShowCollectionUploader] = useState(false);
+  const [showDocumentManager, setShowDocumentManager] = useState(false);
   const [highlightedSections, setHighlightedSections] = useState([]);
   const [analyzedCollectionId, setAnalyzedCollectionId] = useState(null); // Track which collection was analyzed
   const [showPodcastModal, setShowPodcastModal] = useState(false);
@@ -974,6 +977,7 @@ function App() {
               isProcessing={isProcessing}
               onRestartTutorial={handleRestartTutorial}
               onShowHomePage={handleShowHomePage}
+              onOpenDocumentManager={() => setShowDocumentManager(true)}
             />
 
         <div className="flex" style={{ height: 'calc(100vh - 80px)' }}>
@@ -1045,87 +1049,20 @@ function App() {
               />
             </div>
 
-            {/* Right Sidebar */}
-            <div className="w-80 border-l border-gray-200/60 backdrop-blur-xl bg-white/60 p-6 shadow-sm">
-              <div className="space-y-6">
-                {/* Smart Connections */}
-                <Card className="bg-gradient-to-br from-yellow-100 to-orange-100 border-yellow-300/40 backdrop-blur-sm shadow-lg">
-                  <div className="p-6 text-center">
-                    <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-2xl flex items-center justify-center shadow-lg shadow-yellow-500/25">
-                      <Lightbulb className="w-8 h-8 text-white animate-pulse" />
-                    </div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">Smart Connections</h3>
-                    <p className="text-gray-700 text-sm mb-4 leading-relaxed">
-                      Create a collection or select a document to discover relevant sections
-                    </p>
-                    <div className="flex items-center justify-center gap-2 text-yellow-600 text-xs">
-                      <Sparkles className="w-3 h-3" />
-                      <span>AI-Powered Analysis</span>
-                      <Sparkles className="w-3 h-3" />
-                    </div>
-                  </div>
-                </Card>
-
-                {/* AI Features */}
-                <Card 
-                  className={`bg-gradient-to-br from-purple-100 to-pink-100 border-purple-300/40 backdrop-blur-sm shadow-lg cursor-pointer transition-all duration-300 hover:shadow-xl hover:scale-105 ${
-                    selectedTextData?.selectedText ? 'ring-2 ring-purple-300' : ''
-                  }`}
-                  onClick={() => {
-                    if (selectedTextData?.selectedText) {
-                      setShowAIAssistant(true);
-                    }
-                  }}
-                >
-                  <div className="p-6">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
-                        <Brain className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-base font-semibold text-gray-900">AI Assistant</h3>
-                        {selectedTextData?.selectedText ? (
-                          <p className="text-xs text-purple-600 font-medium">
-                            Click to analyze selected text
-                          </p>
-                        ) : (
-                          <p className="text-xs text-gray-500">
-                            Select text in PDF to activate
-                          </p>
-                        )}
-                      </div>
-                      {selectedTextData?.selectedText && (
-                        <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                      )}
-                    </div>
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-gray-700 text-sm">
-                        <Zap className="w-3 h-3 text-purple-500" />
-                        <span>AI-Powered Insights</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-700 text-sm">
-                        <Zap className="w-3 h-3 text-pink-500" />
-                        <span>Key Takeaways</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-700 text-sm">
-                        <Zap className="w-3 h-3 text-cyan-500" />
-                        <span>Context Analysis</span>
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-
-                {/* Podcast Mode */}
-                <Button className="w-full bg-gradient-to-r from-gray-200 to-gray-300 hover:from-gray-300 hover:to-gray-400 text-gray-800 py-4 rounded-2xl shadow-lg transition-all duration-300 hover:shadow-xl hover:scale-105">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-gray-400/30 rounded-full flex items-center justify-center">
-                      <div className="w-3 h-3 bg-gray-600 rounded-full animate-pulse"></div>
-                    </div>
-                    <span className="font-medium">Podcast Mode</span>
-                  </div>
-                </Button>
-              </div>
-            </div>
+            {/* Right Sidebar - Smart Connections */}
+            <SmartConnections
+              currentDocument={currentDocument}
+              recommendations={recommendations}
+              currentSessionId={currentSessionId}
+              isProcessing={isProcessing}
+              onGetRecommendations={setRecommendations}
+              activeCollection={activeCollection}
+              onNavigateToSection={handleNavigateToSection}
+              pdfStructure={pdfStructure}
+              isExtractingStructure={isExtractingStructure}
+              currentSection={currentSection}
+              selectedTextData={selectedTextData}
+            />
           </div>
         </div>
 
@@ -1173,6 +1110,22 @@ function App() {
               />
             </div>
           </div>
+        )}
+
+        {/* Document Manager Modal */}
+        {showDocumentManager && (
+          <DocumentManager
+            isDarkMode={isDarkMode}
+            onClose={() => setShowDocumentManager(false)}
+            onDocumentDeleted={(documentId, filename) => {
+              console.log(`Document deleted: ${filename} (ID: ${documentId})`);
+              // Refresh documents list or update state as needed
+              // If the deleted document was the current document, clear it
+              if (currentDocument && currentDocument.id === documentId) {
+                setCurrentDocument(null);
+              }
+            }}
+          />
         )}
 
         {/* Podcast Modal */}

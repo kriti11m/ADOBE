@@ -12,6 +12,10 @@ from typing import List, Optional, Dict, Any
 import uvicorn
 import os
 import json
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Import routers
 from app.part1a.router import router as part1a_router
@@ -19,6 +23,7 @@ from app.part1b.router import router as part1b_router
 from app.documents.router import router as documents_router
 from app.insights.router import router as insights_router
 from app.text_selection.router import router as text_selection_router
+from app.collections.router import router as collections_router
 
 # Create FastAPI application
 app = FastAPI(
@@ -50,6 +55,7 @@ app.include_router(part1b_router)
 app.include_router(documents_router)
 app.include_router(insights_router)
 app.include_router(text_selection_router)
+app.include_router(collections_router)
 
 # Contest required health check endpoint
 @app.get("/health")

@@ -3,11 +3,52 @@
  * Connects React components to backend finale features
  */
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8083';
 
 class FinaleIntegrationService {
   constructor() {
     this.baseURL = API_BASE_URL;
+  }
+
+  /**
+   * Find relevant sections across all documents using Gemini-powered Part 1B analysis
+   * This is the core Smart Connections functionality for Adobe Hackathon Finale
+   */
+  async findRelevantSectionsGemini(selectedText, documentIds = null) {
+    try {
+      const requestBody = {
+        text: selectedText
+      };
+      
+      if (documentIds && documentIds.length > 0) {
+        requestBody.document_ids = documentIds;
+      }
+
+      const response = await fetch(`${this.baseURL}/part1b/find-relevant-sections`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return {
+        success: data.success,
+        sections: data.relevant_sections || [],
+        totalAnalyzed: data.total_sections_analyzed || 0,
+        processingTime: data.metadata?.processing_time || 0,
+        documentsSearched: data.metadata?.documents_searched || 0,
+        selectedText: data.selected_text
+      };
+    } catch (error) {
+      console.error('Error finding relevant sections with Gemini:', error);
+      throw error;
+    }
   }
 
   /**
@@ -256,6 +297,7 @@ class FinaleIntegrationService {
   }
 }
 
-// Export singleton instance
+// Export both class and singleton instance
+export { FinaleIntegrationService };
 export const finaleIntegrationService = new FinaleIntegrationService();
-export default finaleIntegrationService;
+export default FinaleIntegrationService;

@@ -63,7 +63,7 @@ def get_llm_response(messages):
         model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
         if not api_key and not credentials_path:
-            raise ValueError("Either GOOGLE_API_KEY or GOOGLE_APPLICATION_CREDENTIALS must be set.")
+            raise ValueError("Either GOOGLE_API_KEY/GEMINI_API_KEY or GOOGLE_APPLICATION_CREDENTIALS must be set.")
 
         # Use API key if available, otherwise use service account credentials
         if api_key:

@@ -106,56 +106,81 @@ class UnifiedLLMService:
             print(f"🧠 LLM Service: Generating insights for text of length {len(selected_text)}")
             print(f"🧠 LLM Service: Found {len(related_sections)} related sections")
             
-            # Shorter, more focused prompt to avoid timeouts
+            # Build context from related sections
+            sections_context = ""
+            if related_sections:
+                sections_context = "\n\nRELATED SECTIONS FROM OTHER DOCUMENTS:\n"
+                for i, section in enumerate(related_sections[:3], 1):  # Limit to top 3 for brevity
+                    section_text = section.get('content', section.get('text', ''))[:300]  # Limit length
+                    document_name = section.get('document', section.get('document_name', f'Document {i}'))
+                    sections_context += f"\n{i}. From '{document_name}':\n{section_text}...\n"
+            
+            # Enhanced prompt that analyzes cross-document relationships
             prompt = f"""
-            Analyze this selected text and generate insights:
+            Analyze the selected text in the context of related content from other documents to provide cross-document insights.
             
-            Selected Text: "{selected_text[:500]}..."
+            SELECTED TEXT:
+            "{selected_text[:800]}"
+            {sections_context}
             
-            Related sections found: {len(related_sections)}
+            Please provide specific insights in these categories:
             
-            Provide brief insights about:
-            1. Key concepts and themes
-            2. Important connections or patterns
-            3. Practical applications or implications
+            KEY TAKEAWAYS:
+            - What are the main concepts from the selected text?
+            - How do these concepts relate to the content in other documents?
+            - What important patterns or themes emerge across documents?
             
-            Keep response concise and focused.
+            DID YOU KNOW:
+            - What interesting connections exist between the selected text and related sections?
+            - What unique perspectives or additional context do the related documents provide?
+            - What surprising relationships or correlations can you identify?
+            
+            CONTRADICTIONS/COUNTERPOINTS:
+            - Are there any conflicting viewpoints between the selected text and related sections?
+            - What alternative approaches or perspectives are presented in the related content?
+            
+            EXAMPLES:
+            - What specific examples or case studies from the related sections support or illustrate the selected text?
+            - How do the related sections provide practical applications of the concepts?
+            
+            Focus on cross-document analysis and meaningful connections. Be specific and actionable.
             """
             
             messages = [
-                {"role": "system", "content": "You are a helpful document analyst. Provide brief, actionable insights."},
+                {"role": "system", "content": "You are an expert document analyst specializing in cross-document insights. Analyze relationships between content from multiple documents to provide meaningful, specific insights."},
                 {"role": "user", "content": prompt}
             ]
             
-            print(f"🧠 LLM Service: Sending request to {self.provider}")
+            print(f"🧠 LLM Service: Sending enhanced cross-document request to {self.provider}")
             
             if get_llm_response:
-                # Add timeout handling
-                import signal
+                # Cross-platform timeout handling using concurrent.futures
+                import concurrent.futures
+                import threading
                 
-                def timeout_handler(signum, frame):
-                    raise TimeoutError("LLM request timed out")
-                
-                signal.signal(signal.SIGALRM, timeout_handler)
-                signal.alarm(30)  # 30 second timeout
+                def run_with_timeout(func, args, timeout_seconds=45):  # Increased timeout for more complex analysis
+                    """Run function with timeout that works on Windows and Unix"""
+                    try:
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(func, *args)
+                            return future.result(timeout=timeout_seconds)
+                    except concurrent.futures.TimeoutError:
+                        raise TimeoutError("LLM request timed out")
                 
                 try:
-                    response = get_llm_response(messages)
-                    signal.alarm(0)  # Cancel timeout
+                    response = run_with_timeout(get_llm_response, (messages,), 45)
                     
                     if response:
-                        print(f"✅ LLM Service: Generated {len(response)} characters of insights")
+                        print(f"✅ LLM Service: Generated {len(response)} characters of cross-document insights")
                         return response
                     else:
                         print("⚠️ LLM Service: Empty response received")
                         return "Unable to generate insights at this time."
                         
                 except TimeoutError:
-                    signal.alarm(0)  # Cancel timeout
                     print("⏰ LLM Service: Request timed out")
                     return "Insight generation timed out. Please try again with shorter text."
                 except Exception as llm_error:
-                    signal.alarm(0)  # Cancel timeout
                     print(f"❌ LLM Service: LLM call failed: {llm_error}")
                     return self._fallback_related_insights(selected_text, related_sections)
             else:
@@ -165,6 +190,154 @@ class UnifiedLLMService:
         except Exception as e:
             print(f"❌ LLM Service: Error generating related content insights: {e}")
             return f"Insight analysis completed. Found {len(related_sections)} related sections for the selected text."
+    
+    def generate_comprehensive_insights(self, selected_text: str, all_documents: List[Dict[str, Any]], related_sections: List[Dict[str, Any]] = None) -> str:
+        """
+        Generate comprehensive cross-document insights as required by Adobe Hackathon
+        Searches ALL documents for contradictory findings, inspirations, examples, and cross-document connections
+        
+        Args:
+            selected_text: The text selected by the user
+            all_documents: List of all uploaded documents with their content
+            related_sections: Optional related sections from semantic search
+            
+        Returns:
+            String containing comprehensive cross-document insights
+        """
+        try:
+            print(f"🧠 LLM Service: Generating comprehensive insights across {len(all_documents)} documents")
+            print(f"🧠 LLM Service: Selected text length: {len(selected_text)}")
+            
+            # Build comprehensive document context
+            documents_context = ""
+            if all_documents:
+                documents_context = "\n\nALL UPLOADED DOCUMENTS FOR ANALYSIS:\n"
+                for i, doc in enumerate(all_documents[:10], 1):  # Limit to top 10 to avoid token limits
+                    content = doc.get('content', '')[:1500]  # Limit content per document
+                    doc_name = doc.get('document_name', f'Document {i}')
+                    documents_context += f"\n--- Document {i}: {doc_name} ---\n{content}\n"
+            
+            # Adobe Hackathon specific prompt for comprehensive analysis
+            prompt = f"""
+            ADOBE HACKATHON - COMPREHENSIVE CROSS-DOCUMENT INSIGHTS ANALYSIS
+            
+            Analyze the selected text against ALL uploaded documents to provide specific, actionable insights.
+            
+            SELECTED TEXT TO ANALYZE:
+            "{selected_text}"
+            {documents_context}
+            
+            Please provide insights in EXACTLY this format with clear headers:
+            
+            KEY TAKEAWAYS:
+            - [Specific takeaway from cross-document analysis]
+            - [Main concept connecting multiple documents]
+            - [Actionable insight grounded in the document collection]
+            
+            DID YOU KNOW:
+            - [Surprising connection between selected text and other documents]
+            - [Interesting pattern discovered across documents]
+            - [Unique fact that emerges from cross-referencing]
+            
+            CONTRADICTIONS / COUNTERPOINTS:
+            - [Specific conflicting viewpoint found in another document]
+            - [Alternative approach mentioned in different source]
+            - [Opposing evidence or methodology from the collection]
+            
+            EXAMPLES:
+            - [Specific example from another document that supports the selected text]
+            - [Real-world case study mentioned in the collection]
+            - [Practical application found in different documents]
+            
+            CROSS-DOCUMENT INSPIRATIONS:
+            - [Creative connection between ideas from different sources]
+            - [Novel insight that emerges from combining multiple documents]
+            - [Innovative application discovered through cross-analysis]
+            
+            REQUIREMENTS:
+            1. Be specific about which documents provide evidence
+            2. Focus on contradictions, connections, and inspirations
+            3. Ground ALL insights in the actual uploaded documents
+            4. Use bullet points for each section
+            5. Provide actionable, specific insights - not generic statements
+            
+            If you find conflicts between documents, highlight them clearly in the CONTRADICTIONS section.
+            If you find inspiring connections, detail them in the INSPIRATIONS section.
+            """
+            
+            messages = [
+                {"role": "system", "content": "You are an expert document analyst for the Adobe Hackathon specializing in comprehensive cross-document insights. Your goal is to find contradictory findings, inspirations, examples, and connections across ALL uploaded documents. Never use generic web knowledge - only analyze the provided documents."},
+                {"role": "user", "content": prompt}
+            ]
+            
+            print(f"🧠 LLM Service: Sending comprehensive cross-document analysis request to {self.provider}")
+            
+            if get_llm_response:
+                import concurrent.futures
+                
+                def run_with_timeout(func, args, timeout_seconds=60):  # Longer timeout for comprehensive analysis
+                    """Run function with timeout that works on Windows and Unix"""
+                    try:
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(func, *args)
+                            return future.result(timeout=timeout_seconds)
+                    except concurrent.futures.TimeoutError:
+                        raise TimeoutError("Comprehensive LLM analysis timed out")
+                
+                try:
+                    response = run_with_timeout(get_llm_response, (messages,), 60)
+                    
+                    if response:
+                        print(f"✅ LLM Service: Generated {len(response)} characters of comprehensive cross-document insights")
+                        return response
+                    else:
+                        print("⚠️ LLM Service: Empty response from LLM")
+                        return self._fallback_comprehensive_insights(selected_text, all_documents)
+                        
+                except TimeoutError:
+                    print("⏰ LLM Service: Comprehensive analysis timed out")
+                    return f"Comprehensive cross-document analysis initiated across {len(all_documents)} documents. Analysis taking longer than expected - please try again."
+                except Exception as llm_error:
+                    print(f"❌ LLM Service: Comprehensive LLM call failed: {llm_error}")
+                    return self._fallback_comprehensive_insights(selected_text, all_documents)
+            else:
+                print("⚠️ LLM Service: No LLM response function available")
+                return self._fallback_comprehensive_insights(selected_text, all_documents)
+                
+        except Exception as e:
+            print(f"❌ LLM Service: Error generating comprehensive insights: {e}")
+            return f"Comprehensive cross-document analysis attempted across {len(all_documents)} documents. Analysis encountered an error - please try again."
+    
+    def _fallback_comprehensive_insights(self, selected_text: str, all_documents: List[Dict[str, Any]]) -> str:
+        """Fallback for comprehensive insights when LLM is unavailable"""
+        doc_names = [doc.get('document_name', 'Unknown') for doc in all_documents]
+        return f"""
+        COMPREHENSIVE CROSS-DOCUMENT ANALYSIS INITIATED
+        
+        KEY TAKEAWAYS:
+        - Selected text analyzed across {len(all_documents)} documents in your collection
+        - Cross-document patterns and themes identified
+        - Documents analyzed: {', '.join(doc_names[:5])}{'...' if len(doc_names) > 5 else ''}
+        
+        DID YOU KNOW:
+        - Your document collection contains {len(all_documents)} sources for cross-referencing
+        - Cross-document analysis can reveal hidden connections and contradictions
+        - Selected text: "{selected_text[:100]}..."
+        
+        CONTRADICTIONS / COUNTERPOINTS:
+        - Searching for conflicting viewpoints across all uploaded documents
+        - Cross-referencing alternative approaches and methodologies
+        
+        EXAMPLES:
+        - Analyzing practical applications and case studies across your document collection
+        - Identifying supporting evidence from multiple sources
+        
+        CROSS-DOCUMENT INSPIRATIONS:
+        - Discovering novel connections between concepts from different documents
+        - Identifying emergent themes and innovative applications
+        
+        Note: LLM analysis temporarily unavailable. Upload more documents for richer cross-document insights.
+        """
     
     def generate_podcast_script(self, content: str, speakers: int = 2) -> str:
         """

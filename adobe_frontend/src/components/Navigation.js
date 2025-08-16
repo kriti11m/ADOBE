@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Moon, Sun, HelpCircle } from 'lucide-react';
+import { Settings, Moon, Sun, HelpCircle, HardDrive } from 'lucide-react';
 import { useDarkMode } from '../App';
 
 const Navigation = ({ 
@@ -10,6 +10,7 @@ const Navigation = ({
   onRestartTutorial,
   onOpenSettings,
   onShowHomePage = () => {}, // Add this prop
+  onOpenDocumentManager, // Add document manager prop
   userProfile
 }) => {
   const { isDarkMode, toggleDarkMode } = useDarkMode();
@@ -145,6 +146,28 @@ const Navigation = ({
                       <div className={`text-xs ${
                         isDarkMode ? 'text-gray-400' : 'text-gray-500'
                       }`}>Learn how to use the app</div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowSettingsMenu(false);
+                      if (onOpenDocumentManager) onOpenDocumentManager();
+                    }}
+                    className={`w-full text-left p-3 rounded-xl transition-all duration-200 text-sm flex items-center gap-3 group ${
+                      isDarkMode 
+                        ? 'hover:bg-gray-700/50 text-white' 
+                        : 'hover:bg-gray-100/50 text-gray-900'
+                    }`}
+                  >
+                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <HardDrive className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <div className="font-medium">Manage Documents</div>
+                      <div className={`text-xs ${
+                        isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                      }`}>View, delete, or clear all files</div>
                     </div>
                   </button>
                   
