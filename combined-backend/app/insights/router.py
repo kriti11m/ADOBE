@@ -7,6 +7,7 @@ Integrates with contest LLM providers (Gemini, Ollama, etc.)
 import os
 import tempfile
 import time
+import hashlib
 from typing import Dict, Any, List, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -18,7 +19,7 @@ from ..services.llm_service import llm_service
 
 # Import TTS service
 try:
-    from ..services.tts_service import tts_service
+    from ..tts.service import tts_service
 except ImportError:
     print("Warning: TTS service not found, audio features may be limited")
     tts_service = None
@@ -41,6 +42,9 @@ except Exception as e:
 # Create router
 router = APIRouter(prefix="/insights", tags=["insights"])
 
+# Global cache for audio files
+audio_cache = {}  # {content_hash: {voice: file_path}}
+
 # Pydantic models for finale features
 class InsightsBulbRequest(BaseModel):
     selected_text: str
@@ -52,6 +56,9 @@ class AudioOverviewRequest(BaseModel):
     related_sections: List[Dict[str, Any]]
     audio_type: str = "overview"  # "overview" or "podcast"
     duration_minutes: int = 3
+    voice: str = "female"  # "male" or "female"
+    speed: float = 1.0  # 0.5 = slow, 1.0 = normal, 1.5 = fast
+    insights: Optional[Dict[str, Any]] = None  # Generated insights from insights bulb
 
 class InsightsResponse(BaseModel):
     success: bool
@@ -207,16 +214,22 @@ async def generate_audio_overview(request: AudioOverviewRequest):
         if not request.selected_text:
             raise HTTPException(status_code=400, detail="Selected text is required")
         
-        # Generate script for audio content
+        # Generate script for audio content with insights
         script = _generate_audio_script(
             request.selected_text,
             request.related_sections,
             request.audio_type,
-            request.duration_minutes
+            request.duration_minutes,
+            request.insights  # Pass the insights
         )
         
-        # Generate audio using TTS service
-        audio_file_path = await _generate_audio_file(script, request.audio_type)
+        # Generate audio using TTS service with voice and speed options
+        audio_file_path = await _generate_audio_file(
+            script, 
+            request.audio_type, 
+            request.voice, 
+            request.speed
+        )
         
         if not audio_file_path or not os.path.exists(audio_file_path):
             raise HTTPException(status_code=500, detail="Audio generation failed")
@@ -233,74 +246,254 @@ async def generate_audio_overview(request: AudioOverviewRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Audio generation error: {str(e)}")
 
+@router.post("/check-audio-cache")
+async def check_audio_cache(request: AudioOverviewRequest):
+    """Check if audio files are cached for different voices"""
+    try:
+        # Generate script to create hash with insights
+        script = _generate_audio_script(
+            request.selected_text,
+            request.related_sections,
+            request.audio_type,
+            request.duration_minutes,
+            request.insights  # Pass the insights
+        )
+        
+        content_hash = hashlib.md5(f"{script}_{request.audio_type}".encode()).hexdigest()
+        
+        available_voices = {}
+        if content_hash in audio_cache:
+            for voice, file_path in audio_cache[content_hash].items():
+                if os.path.exists(file_path):
+                    available_voices[voice] = True
+                else:
+                    available_voices[voice] = False
+        else:
+            available_voices = {"male": False, "female": False}
+            
+        return {
+            "cached_voices": available_voices,
+            "content_hash": content_hash
+        }
+        
+    except Exception as e:
+        return {
+            "cached_voices": {"male": False, "female": False},
+            "error": str(e)
+        }
+
 # Helper functions
 
 def _generate_audio_script(
     selected_text: str, 
     related_sections: List[Dict], 
     audio_type: str, 
-    duration_minutes: int
+    duration_minutes: int,
+    generated_insights: Dict = None
 ) -> str:
-    """Generate script for audio overview/podcast"""
+    """Generate script for audio overview/podcast using actual insights and content"""
+    
+    # Use provided insights or generate them
+    if generated_insights:
+        insights_content = _format_existing_insights(generated_insights, selected_text, related_sections)
+    else:
+        insights_content = _extract_content_insights(selected_text, related_sections)
+    
+    # Extract actual content from related sections
+    section_summaries = []
+    for i, section in enumerate(related_sections[:5]):  # Top 5 sections
+        content = ""
+        if 'content' in section and section['content']:
+            content = section['content'][:200] + "..."
+        elif 'text' in section and section['text']:
+            content = section['text'][:200] + "..."
+        elif 'snippet' in section and section['snippet']:
+            content = section['snippet'][:200] + "..."
+            
+        if content:
+            doc_name = section.get('document_name', section.get('source', f'Document {i+1}'))
+            section_summaries.append(f"From {doc_name}: {content}")
     
     if audio_type == "podcast":
-        # Generate podcast script with 2 speakers
+        # Generate content-rich podcast script
         script = f"""
-Host 1: Welcome to Document Insights, where we explore key concepts from your personal document library. Today we're diving into a fascinating topic you've selected from your reading.
+Welcome to Document Insights - your personalized exploration of knowledge from your document library.
 
-Host 2: That's right! Our listener was reading about: "{selected_text[:100]}..." and we found {len(related_sections)} related sections across their document collection.
+Today we're analyzing content you selected: "{selected_text[:150]}{'...' if len(selected_text) > 150 else ''}"
 
-Host 1: Let's break this down. The core concept here touches on some really important themes that appear across multiple documents in your library.
+{insights_content.get('introduction', 'Let me walk you through the key insights we discovered.')}
 
-Host 2: Absolutely! What's interesting is how this concept connects to {len(related_sections)} different sources. It shows the interconnected nature of knowledge in this domain.
+{insights_content.get('main_content', f'This concept appears across {len(related_sections)} related sections in your document collection.')}
 
-Host 1: From our analysis, there are several key takeaways. First, this topic demonstrates significant relevance across different contexts and applications.
+Here's what we found in your related documents:
 
-Host 2: And the related documents provide both supporting evidence and alternative perspectives, which gives us a more nuanced understanding.
+{chr(10).join(section_summaries[:3]) if section_summaries else 'Multiple relevant sections provide additional context and depth.'}
 
-Host 1: For our listeners, the practical implications are clear - understanding these connections can help bridge knowledge gaps and inspire new approaches.
+{insights_content.get('cross_document_analysis', 'Your documents reveal interesting connections and patterns across different sources.')}
 
-Host 2: Before we wrap up, let's highlight that all of this analysis is grounded in documents you've actually read and uploaded - nothing generic here, just insights from your personal knowledge base.
+{insights_content.get('practical_implications', 'These findings suggest practical applications and opportunities for deeper exploration.')}
 
-Host 1: Thanks for joining us on Document Insights. Keep exploring those connections!
+{insights_content.get('conclusion', f'This analysis of {len(related_sections)} related sections reveals the interconnected nature of knowledge in your research library.')}
+
+That's your personalized insight session. Keep exploring and connecting the dots in your research!
         """
     else:
-        # Generate single-speaker overview
+        # Generate content-rich overview
         script = f"""
-        Welcome to your personalized document overview. You've selected an interesting piece of text that connects to {len(related_sections)} other sections in your document library.
+Welcome to your document analysis. You selected: "{selected_text[:100]}{'...' if len(selected_text) > 100 else ''}"
 
-        The selected text discusses: {selected_text[:200]}
+{insights_content.get('summary', f'We found {len(related_sections)} related sections that connect to your selected text.')}
 
-        Based on our analysis of your documents, this concept appears across multiple sources, indicating its importance in your field of interest.
+Key findings from your documents:
 
-        Key insights from your document collection:
-        - This topic demonstrates consistent relevance across different contexts
-        - Multiple documents provide complementary perspectives on the subject
-        - The cross-references suggest opportunities for deeper exploration
+{chr(10).join(section_summaries[:2]) if section_summaries else 'Your related sections provide valuable context and connections.'}
 
-        Your related documents offer both supporting evidence and alternative viewpoints, creating a rich foundation for understanding.
+{insights_content.get('key_points', 'These connections reveal important patterns in your research area.')}
 
-        This analysis is entirely based on documents you've personally curated and uploaded, ensuring relevance to your specific interests and research focus.
-
-        Continue exploring these connections to uncover new insights and deepen your understanding.
+{insights_content.get('conclusion', 'Continue exploring these connections to deepen your understanding.')}
         """
     
     return script.strip()
 
-async def _generate_audio_file(script: str, audio_type: str) -> str:
-    """Generate audio file from script using TTS service"""
+def _format_existing_insights(insights: Dict, selected_text: str, related_sections: List[Dict]) -> Dict[str, str]:
+    """Format existing insights from insights bulb into script-friendly content"""
+    formatted = {}
+    
+    # Extract key takeaways
+    if 'key_takeaways' in insights:
+        takeaways = insights['key_takeaways']
+        if isinstance(takeaways, list):
+            takeaways_text = " ".join(takeaways[:3])  # Top 3 takeaways
+        else:
+            takeaways_text = str(takeaways)[:300]
+        formatted['main_content'] = f"The key insights show that {takeaways_text}"
+    
+    # Extract contradictions or different perspectives
+    if 'contradictions' in insights:
+        contradictions = insights['contradictions']
+        if contradictions:
+            formatted['cross_document_analysis'] = f"Interestingly, your documents present different perspectives: {str(contradictions)[:200]}..."
+    
+    # Extract examples
+    if 'examples' in insights:
+        examples = insights['examples']
+        if examples:
+            formatted['practical_implications'] = f"Practical examples from your documents include: {str(examples)[:200]}..."
+    
+    # Extract did_you_know facts
+    if 'did_you_know' in insights:
+        facts = insights['did_you_know']
+        if facts:
+            formatted['introduction'] = f"Here's something fascinating from your research: {str(facts)[:200]}..."
+    
+    # Create summary and conclusion
+    formatted['summary'] = f"Your selected text about {selected_text[:50]}... connects to {len(related_sections)} sections with rich insights."
+    formatted['conclusion'] = "These insights from your personal document collection provide unique perspectives on your research area."
+    
+    return formatted
+
+def _extract_content_insights(selected_text: str, related_sections: List[Dict]) -> Dict[str, str]:
+    """Extract insights from actual content using LLM service"""
     try:
-        # Use the TTS service to generate audio
-        audio_filename = f"audio_{audio_type}_{int(time.time())}.mp3"
+        # Prepare content for analysis
+        content_summary = f"Selected text: {selected_text}\n\n"
+        
+        # Add related sections content
+        for i, section in enumerate(related_sections[:5]):  # Limit to top 5 for efficiency
+            if 'content' in section and section['content']:
+                content_summary += f"Related section {i+1}: {section['content'][:300]}...\n"
+            elif 'text' in section and section['text']:
+                content_summary += f"Related section {i+1}: {section['text'][:300]}...\n"
+        
+        # Generate insights using LLM
+        prompt = f"""
+Based on the following content from a user's document library, create insights for a podcast script:
+
+{content_summary}
+
+Please provide:
+1. A brief introduction explaining what the selected text is about
+2. Main content analysis highlighting key themes and concepts
+3. Cross-document analysis showing how the related sections connect
+4. Practical implications or applications
+5. A summary of key takeaways
+6. A concluding thought
+
+Format as JSON with keys: introduction, main_content, cross_document_analysis, practical_implications, summary, key_points, conclusion
+Keep each section 2-3 sentences, conversational tone suitable for audio.
+"""
+
+        # Use LLM service to generate insights
+        insights_response = llm_service.generate_response(prompt)
+        
+        # Try to parse as JSON, fallback to structured text if needed
+        try:
+            import json
+            insights_data = json.loads(insights_response)
+        except:
+            # Fallback to basic structure
+            insights_data = {
+                'introduction': f"We're examining content about {selected_text[:100]}... which appears across multiple documents in your collection.",
+                'main_content': f"The core concept revolves around key themes found in your research, with {len(related_sections)} related sections providing additional context and depth.",
+                'cross_document_analysis': "Your documents show interesting connections and patterns, revealing how this topic bridges different areas of your research focus.",
+                'practical_implications': "These findings suggest practical applications and opportunities for deeper exploration in your field of study.",
+                'summary': f"Your selected text connects to {len(related_sections)} related sections, showing important patterns.",
+                'key_points': "Multiple perspectives across your documents provide a comprehensive view of this topic.",
+                'conclusion': "This analysis reveals the interconnected nature of knowledge in your personal research library."
+            }
+        
+        return insights_data
+        
+    except Exception as e:
+        print(f"Error generating content insights: {e}")
+        # Fallback to basic insights
+        return {
+            'introduction': f"We're exploring content from your documents about {selected_text[:100]}...",
+            'main_content': f"This concept appears across {len(related_sections)} related sections in your library, indicating its significance.",
+            'cross_document_analysis': "Your documents provide multiple perspectives on this topic, creating a rich foundation for understanding.",
+            'practical_implications': "These cross-document connections offer valuable insights for your research and learning.",
+            'summary': f"The selected text connects to {len(related_sections)} related sections across your document collection.",
+            'key_points': "Key themes emerge from multiple sources, providing depth and context to your research.",
+            'conclusion': "Continue exploring these connections to deepen your understanding."
+        }
+
+async def _generate_audio_file(script: str, audio_type: str, voice: str = "female", speed: float = 1.0) -> str:
+    """Generate audio file from script using TTS service with caching"""
+    try:
+        # Create a hash for the content (script + audio_type) to use as cache key
+        content_hash = hashlib.md5(f"{script}_{audio_type}".encode()).hexdigest()
+        
+        # Check if we already have this content cached for the requested voice
+        if content_hash in audio_cache and voice in audio_cache[content_hash]:
+            cached_file = audio_cache[content_hash][voice]
+            if os.path.exists(cached_file):
+                print(f"🔄 Using cached audio for {voice} voice: {cached_file}")
+                return cached_file
+            else:
+                # Remove invalid cache entry
+                del audio_cache[content_hash][voice]
+                if not audio_cache[content_hash]:
+                    del audio_cache[content_hash]
+        
+        # Generate new audio file
+        audio_filename = f"audio_{audio_type}_{voice}_{speed}x_{int(time.time())}.mp3"
         temp_dir = os.path.join(os.path.dirname(__file__), "..", "..", "temp_audio")
         os.makedirs(temp_dir, exist_ok=True)
         
         audio_file_path = os.path.join(temp_dir, audio_filename)
         
-        # Generate audio using existing TTS service
-        success = await tts_service.generate_audio(script, audio_file_path)
+        print(f"🎵 Generating new audio for {voice} voice: {audio_filename}")
         
-        if success:
+        # Generate audio using TTS service with voice and speed options
+        success = await tts_service.generate_audio(script, audio_file_path, voice=voice, speed=speed)
+        
+        if success and os.path.exists(audio_file_path):
+            # Cache the generated file
+            if content_hash not in audio_cache:
+                audio_cache[content_hash] = {}
+            audio_cache[content_hash][voice] = audio_file_path
+            print(f"💾 Cached audio file for {voice} voice")
+            
             return audio_file_path
         else:
             return None

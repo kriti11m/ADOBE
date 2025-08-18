@@ -15,7 +15,8 @@ import json
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv()
+load_dotenv()  # Load from current directory (.env)
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))  # Load from parent directory
 
 # Import routers
 from app.part1a.router import router as part1a_router
