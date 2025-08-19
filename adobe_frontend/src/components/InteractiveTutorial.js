@@ -127,7 +127,7 @@ const InteractiveTutorial = ({
   const tutorialSteps = [
     {
       id: 'welcome',
-      title: 'Welcome to Doc-a-doodle! 🚀',
+      title: 'Welcome to DocuVerse! 🚀',
       description: 'Your next-generation AI-powered PDF analysis companion. Prepare to experience revolutionary document intelligence that will transform how you work with PDFs forever. Let\'s embark on this incredible journey through cutting-edge features designed to supercharge your productivity.',
       target: null,
       position: 'center',

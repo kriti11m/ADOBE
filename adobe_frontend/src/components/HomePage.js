@@ -69,14 +69,14 @@ const HomePage = ({ onStartTutorial, isDarkMode, toggleDarkMode }) => {
         <div className="max-w-4xl mx-auto text-center">
           {/* Main Title */}
           <h1 className="text-4xl md:text-5xl font-bold mb-6 text-gradient fade-in active" style={{animationDelay: '0.2s'}}>
-            Doc-a-doodle
+            DocuVerse
           </h1>
           
           {/* Subtitle */}
           <p className={`text-xl md:text-2xl mb-8 font-medium fade-in active ${
             isDarkMode ? 'text-gray-300' : 'text-gray-600'
           }`} style={{animationDelay: '0.4s'}}>
-            Transform Your Documents with AI-Powered Intelligence
+            where all your docs live in a connected universe
           </p>
 
           {/* Description */}

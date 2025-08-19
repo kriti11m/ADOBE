@@ -205,11 +205,25 @@ const SmartConnections = ({
             <div className="flex items-center gap-2">
               <Button
                 onClick={() => setSidebarView(sidebarView === "sections" ? "insights" : "sections")}
-                className={`p-2 rounded-lg ${isDarkMode ? "bg-slate-700 hover:bg-slate-600 text-slate-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"} transition-all duration-300`}
+                className={`p-2 rounded-lg transition-all duration-300 ${
+                  sidebarView === "insights" 
+                    ? isDarkMode 
+                      ? "bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 shadow-lg shadow-yellow-500/25 ring-2 ring-yellow-500/30" 
+                      : "bg-yellow-100 hover:bg-yellow-200 text-yellow-600 shadow-lg shadow-yellow-500/25 ring-2 ring-yellow-300/50"
+                    : isDarkMode 
+                      ? "bg-slate-700 hover:bg-slate-600 text-slate-300" 
+                      : "bg-gray-100 hover:bg-gray-200 text-gray-600"
+                }`}
                 variant="ghost"
                 size="sm"
               >
-                {sidebarView === "sections" ? <Lightbulb className="w-4 h-4" /> : <BookOpen className="w-4 h-4" />}
+                {sidebarView === "sections" ? (
+                  <Lightbulb className="w-4 h-4 text-yellow-400 animate-pulse drop-shadow-lg" style={{
+                    filter: 'drop-shadow(0 0 8px rgba(251, 191, 36, 0.6))'
+                  }} />
+                ) : (
+                  <BookOpen className="w-4 h-4" />
+                )}
               </Button>
               <Button
                 onClick={() => setSidebarExpanded(false)}
@@ -260,7 +274,7 @@ const SmartConnections = ({
                 <h4
                   className={`text-sm font-medium ${isDarkMode ? "text-slate-300" : "text-gray-700"} mb-4 flex items-center gap-2`}
                 >
-                  <Lightbulb className="w-4 h-4 text-yellow-500" />
+                  <Lightbulb className="w-4 h-4 text-yellow-500 animate-pulse drop-shadow-lg" />
                   AI Insights
                 </h4>
 

@@ -29,10 +29,10 @@ const Navigation = ({
             className="flex items-center space-x-3 cursor-pointer hover:scale-105 transition-transform duration-300"
           >
             <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-              <span className="text-white font-bold text-sm">DA</span>
+              <span className="text-white font-bold text-sm">DV</span>
             </div>
             <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              Doc-a-doodle
+              DocuVerse
             </h1>
           </button>
           

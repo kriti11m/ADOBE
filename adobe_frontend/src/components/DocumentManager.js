@@ -218,58 +218,93 @@ const DocumentManager = ({ isDarkMode, onClose, onDocumentDeleted }) => {
               <FileText className={`w-10 h-10 mx-auto mb-3 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`} />
               <p className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>No documents found</p>
               <p className={`text-sm mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                Upload some PDFs to see them here
+                Upload some documents to see them here
               </p>
             </div>
           ) : (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {documents.map(doc => (
                 <div
                   key={doc.id}
-                  className={`p-3 rounded-lg border transition-all duration-200 ${
+                  className={`group p-3 rounded-lg border transition-all duration-200 backdrop-blur-sm ${
                     isDarkMode 
-                      ? 'bg-gray-800/50 border-gray-700/50 hover:bg-gray-800 hover:border-gray-600' 
-                      : 'bg-gray-50/80 border-gray-200/60 hover:bg-white hover:border-gray-300 hover:shadow-sm'
+                      ? 'bg-gray-800/40 border-gray-700/50 hover:bg-gray-800/60 hover:border-gray-600/70 hover:shadow-md hover:shadow-gray-900/20' 
+                      : 'bg-white/60 border-gray-200/60 hover:bg-white/90 hover:border-gray-300/80 hover:shadow-sm hover:shadow-gray-200/50'
                   }`}
                 >
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-start gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <FileText className={`w-4 h-4 flex-shrink-0 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
-                        <h3 className={`font-medium text-sm truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                          {doc.original_filename || doc.filename}
-                        </h3>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          {doc.file_exists ? (
-                            <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                          ) : (
-                            <AlertCircle className="w-3.5 h-3.5 text-red-500" />
-                          )}
-                          <span className={`text-xs font-medium ${doc.file_exists ? 'text-green-600' : 'text-red-600'}`}>
-                            {doc.file_exists ? 'Available' : 'Missing'}
-                          </span>
+                      {/* Document Header */}
+                      <div className="flex items-start gap-2 mb-2">
+                        <div className={`flex-shrink-0 p-1.5 rounded-md ${
+                          isDarkMode ? 'bg-gray-700/60' : 'bg-gray-100/80'
+                        }`}>
+                          <FileText className={`w-3.5 h-3.5 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 
+                            className={`font-semibold text-sm leading-tight mb-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}
+                            title={doc.original_filename || doc.filename}
+                            style={{
+                              display: '-webkit-box',
+                              WebkitLineClamp: 1,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                              lineHeight: '1.3',
+                              maxHeight: '1.3em'
+                            }}
+                          >
+                            {(doc.original_filename || doc.filename).length > 35 
+                              ? `${(doc.original_filename || doc.filename).substring(0, 32)}...` 
+                              : (doc.original_filename || doc.filename)
+                            }
+                          </h3>
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1">
+                              {doc.file_exists ? (
+                                <CheckCircle className="w-3 h-3 text-green-500" />
+                              ) : (
+                                <AlertCircle className="w-3 h-3 text-red-500" />
+                              )}
+                              <span className={`text-xs font-medium ${
+                                doc.file_exists 
+                                  ? 'text-green-600 dark:text-green-400' 
+                                  : 'text-red-600 dark:text-red-400'
+                              }`}>
+                                {doc.file_exists ? 'Available' : 'Missing'}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      <div className={`text-xs mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'} flex items-center gap-3`}>
-                        <span>ID: {doc.id}</span>
-                        <span>{formatFileSize(doc.file_size)}</span>
-                        <span>{formatDate(doc.upload_date)}</span>
+                      
+                      {/* Document Metadata */}
+                      <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'} space-y-0.5`}>
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono">ID: {doc.id}</span>
+                          <span className="font-medium">{formatFileSize(doc.file_size)}</span>
+                        </div>
+                        <div className="text-right">
+                          {formatDate(doc.upload_date)}
+                        </div>
                       </div>
                     </div>
+                    
+                    {/* Delete Button */}
                     <button
                       onClick={() => setShowConfirmDelete(doc)}
                       disabled={deleteLoading[doc.id]}
-                      className={`p-1.5 rounded-md transition-colors ml-3 flex-shrink-0 ${
+                      className={`p-1.5 rounded-md transition-all duration-200 flex-shrink-0 ${
                         isDarkMode 
-                          ? 'text-red-400 hover:text-red-300 hover:bg-red-900/20' 
-                          : 'text-red-500 hover:text-red-600 hover:bg-red-50'
-                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                          ? 'text-red-400 hover:text-red-300 hover:bg-red-900/30 active:bg-red-900/50' 
+                          : 'text-red-500 hover:text-red-600 hover:bg-red-50 active:bg-red-100'
+                      } disabled:opacity-50 disabled:cursor-not-allowed group-hover:scale-105`}
                       title="Delete document"
                     >
                       {deleteLoading[doc.id] ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                       ) : (
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       )}
                     </button>
                   </div>

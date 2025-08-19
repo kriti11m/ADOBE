@@ -1,7 +1,7 @@
-# Doc-a-doodle 🚀
+# DocuVerse 🚀
 ## Adobe India Hackathon 2025 - Interactive PDF Intelligence Platform
 
-A revolutionary AI-powered PDF analysis platform that transforms how you interact with documents. Built with cutting-edge technology, Doc-a-doodle provides intelligent insights, cross-document analysis, and immersive audio experiences.
+A revolutionary AI-powered PDF analysis platform that transforms how you interact with documents. Built with cutting-edge technology, DocuVerse provides intelligent insights, cross-document analysis, and immersive audio experiences.
 
 ## � Contest Evaluation Instructions
 
@@ -621,4 +621,4 @@ This project was created for Adobe India Hackathon 2025.
 
 ---
 
-*Doc-a-doodle - Where Documents Come Alive with AI* 🚀
+*DocuVerse – where all your docs live in a connected universe* 🚀

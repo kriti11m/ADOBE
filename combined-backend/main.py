@@ -28,8 +28,8 @@ from app.collections.router import router as collections_router
 
 # Create FastAPI application
 app = FastAPI(
-    title="Adobe Contest PDF Processing Backend",
-    description="Contest-compliant backend with text selection, cross-document insights, and LLM integration",
+    title="DocuVerse API",
+    description="DocuVerse – where all your docs live in a connected universe. Text selection, cross-document insights, and LLM integration.",
     version="3.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
@@ -76,9 +76,9 @@ async def serve_react_app(full_path: str):
         # Fallback if frontend not available
         return HTMLResponse(content="""
         <html>
-            <head><title>Frontend Not Available</title></head>
+            <head><title>DocuVerse - Frontend Not Available</title></head>
             <body>
-                <h1>Frontend Build Not Found</h1>
+                <h1>DocuVerse - Frontend Build Not Found</h1>
                 <p>Please build the frontend first: <code>cd adobe_frontend && npm run build</code></p>
                 <p>API Documentation: <a href="/docs">/docs</a></p>
             </body>
@@ -128,7 +128,7 @@ async def root():
         return HTMLResponse(content="""
         <html>
             <head>
-                <title>Adobe Contest Backend</title>
+                <title>DocuVerse API Backend</title>
                 <style>
                     body { font-family: Arial, sans-serif; margin: 40px; }
                     .container { max-width: 800px; margin: 0 auto; }
@@ -139,8 +139,8 @@ async def root():
             </head>
             <body>
                 <div class="container">
-                    <h1>🎯 Adobe Contest Backend</h1>
-                    <p>Contest-compliant PDF processing backend with text selection and cross-document insights.</p>
+                    <h1>� DocuVerse API Backend</h1>
+                    <p>DocuVerse – where all your docs live in a connected universe. PDF processing backend with text selection and cross-document insights.</p>
                     
                     <div class="status">
                         ✅ Backend is running successfully<br>

@@ -5,7 +5,7 @@ import { useDarkMode } from '../App';
 const DocumentSidebar = ({ 
   documents, 
   onDocumentSelect, 
-  onFileUpload, 
+  onFileUpload,
   currentDocument, 
   onShowUploader,
   tutorialActiveTab,
@@ -13,7 +13,6 @@ const DocumentSidebar = ({
 }) => {
   // Use tutorial tab if provided, otherwise use default (changed to documents)
   const [activeTab, setActiveTab] = useState('documents');
-  const [activeFilter, setActiveFilter] = useState('all');
   const [isDragOver, setIsDragOver] = useState(false);
   const [isSingleUploadDragOver, setIsSingleUploadDragOver] = useState(false);
   const fileInputRef = useRef(null);
@@ -82,8 +81,7 @@ const DocumentSidebar = ({
   };
 
   const getFilteredDocuments = () => {
-    if (activeFilter === 'all') return documents;
-    return documents.filter(doc => doc.status === activeFilter);
+    return documents; // Show all documents since filters are removed
   };
 
   const getTagColor = (tag) => {
@@ -133,7 +131,7 @@ const DocumentSidebar = ({
             }`}
           >
             <Plus className="w-4 h-4 inline mr-2" />
-            Upload PDF
+            Upload Document
           </button>
         </div>
 
@@ -178,39 +176,33 @@ const DocumentSidebar = ({
                 📚
               </div>
               <p className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                Bulk Upload PDFs
+                Bulk Upload Documents
               </p>
               <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                Drop multiple PDFs here or click to select
+                Drop multiple documents here or click to select
               </p>
             </div>
 
-            {/* Advanced Bulk Upload Button */}
-            <button
-              onClick={onShowUploader}
-              className={`w-full py-3 px-4 rounded-lg text-sm font-medium transition-colors mb-4 ${
-                isDarkMode 
-                  ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white' 
-                  : 'bg-gradient-to-r from-blue-100 to-blue-200 hover:from-blue-200 hover:to-blue-300 text-blue-700'
-              }`}
-            >
-              <Upload className="w-4 h-4 inline mr-2" />
-              Advanced Bulk Upload & Process
-            </button>
+            {/* Document Library Info */}
+            <div className={`text-xs mb-4 p-3 rounded-lg ${
+              isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600'
+            }`}>
+              Upload and manage your documents here
+            </div>
           </>
         ) : (
-          // Single PDF Upload Tab Content
+          // Single Document Upload Tab Content
           <>
             <div className="flex items-center justify-between mb-4">
               <h2 className={`text-lg font-semibold flex items-center ${
                 isDarkMode ? 'text-white' : 'text-gray-900'
               }`}>
                 <span className="mr-2">📄</span>
-                Upload Single PDF
+                Upload Single Document
               </h2>
             </div>
-            
-            {/* Single PDF Upload Area */}
+
+            {/* Single Document Upload Area */}
             <div 
               className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer mb-4 ${
                 isSingleUploadDragOver 
@@ -237,13 +229,13 @@ const DocumentSidebar = ({
                 📄
               </div>
               <p className={`text-base font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                Upload a Single PDF
+                Upload a Single Document
               </p>
               <p className={`text-sm mb-3 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                Drop one PDF here or click to select
+                Drop one document here or click to select
               </p>
               <p className={`text-xs ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
-                ✨ Opens instantly with Adobe PDF Viewer
+                ✨ Opens instantly with viewer
               </p>
             </div>
           </>
@@ -254,25 +246,6 @@ const DocumentSidebar = ({
       {currentActiveTab === 'documents' ? (
         // Documents Tab Content - Show documents list
         <>
-          {/* Quick Filters */}
-          <div className="p-4 pt-0">
-            <div className="flex gap-1 mb-4">
-              {['all', 'new', 'recent', 'analyzed'].map(filter => (
-                <button
-                  key={filter}
-                  onClick={() => setActiveFilter(filter)}
-                  className={`px-2 py-1 text-xs rounded transition-colors ${
-                    activeFilter === filter
-                      ? isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-800'
-                      : isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-600 hover:text-gray-800'
-                  }`}
-                >
-                  {filter.charAt(0).toUpperCase() + filter.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Documents List */}
           <div className="flex-1 overflow-y-auto px-4 pb-4">
             <div className="space-y-2">
@@ -280,34 +253,81 @@ const DocumentSidebar = ({
                 <div
                   key={document.id}
                   onClick={() => onDocumentSelect(document)}
-                  className={`p-3 rounded-lg cursor-pointer transition-colors border ${
+                  className={`group relative p-2 rounded-lg cursor-pointer transition-all duration-200 border backdrop-blur-sm ${
                     currentDocument?.id === document.id
                       ? isDarkMode 
-                        ? 'bg-blue-600 text-white border-blue-500' 
-                        : 'bg-blue-100 text-blue-900 border-blue-300'
+                        ? 'bg-gradient-to-r from-blue-600/90 to-purple-600/90 text-white border-blue-400/50 shadow-lg shadow-blue-500/25' 
+                        : 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-900 border-blue-300/60 shadow-sm'
                       : isDarkMode 
-                        ? 'hover:bg-gray-700 text-gray-300 border-gray-600 hover:border-gray-500' 
-                        : 'hover:bg-gray-50 text-gray-700 border-gray-200 hover:border-gray-300'
+                        ? 'hover:bg-gray-800/60 text-gray-300 border-gray-700/50 hover:border-gray-600/70 hover:shadow-md hover:shadow-gray-900/20' 
+                        : 'hover:bg-white/80 text-gray-700 border-gray-200/60 hover:border-gray-300/80 hover:shadow-sm'
                   }`}
                 >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center space-x-2">
-                      <FileText className="w-4 h-4 flex-shrink-0" />
-                      <span className="text-sm font-medium truncate">{document.name}</span>
+                  {/* Document Header */}
+                  <div className="flex items-start space-x-2 mb-1">
+                    <div className={`flex-shrink-0 p-1 rounded-md ${
+                      currentDocument?.id === document.id
+                        ? isDarkMode ? 'bg-white/20' : 'bg-blue-200/50'
+                        : isDarkMode ? 'bg-gray-700/50' : 'bg-gray-100/70'
+                    }`}>
+                      <FileText className="w-3 h-3" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-2">
+                        <h3 
+                          className="text-sm font-semibold leading-tight truncate group-hover:text-clip"
+                          title={document.name}
+                          style={{
+                            display: '-webkit-box',
+                            WebkitLineClamp: 1,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                            lineHeight: '1.2',
+                            maxHeight: '1.2em'
+                          }}
+                        >
+                          {document.name.length > 45 
+                            ? `${document.name.substring(0, 42)}...` 
+                            : document.name
+                          }
+                        </h3>
+                      </div>
+                      <div className={`text-xs opacity-75 font-medium ${
+                        isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                      }`}>
+                        {document.timestamp}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs opacity-75">{document.timestamp}</span>
-                    <div className="flex space-x-1">
-                      {document.tags?.map((tag, index) => (
+                  
+                  {/* Document Tags */}
+                  {document.tags && document.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {document.tags.slice(0, 2).map((tag, index) => (
                         <span 
                           key={index}
-                          className={`px-2 py-1 text-xs rounded-full ${getTagColor(tag)}`}
+                          className={`inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded-full ${getTagColor(tag)} backdrop-blur-sm`}
                         >
                           {tag}
                         </span>
                       ))}
+                      {document.tags.length > 2 && (
+                        <span className={`inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded-full ${
+                          isDarkMode ? 'bg-gray-600/40 text-gray-300' : 'bg-gray-200/60 text-gray-600'
+                        }`}>
+                          +{document.tags.length - 2}
+                        </span>
+                      )}
                     </div>
+                  )}
+                  
+                  {/* Hover Indicator */}
+                  <div className={`absolute right-1.5 top-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${
+                    currentDocument?.id === document.id ? 'hidden' : ''
+                  }`}>
+                    <div className={`w-1 h-1 rounded-full ${
+                      isDarkMode ? 'bg-blue-400' : 'bg-blue-500'
+                    }`}></div>
                   </div>
                 </div>
               ))}
@@ -318,7 +338,7 @@ const DocumentSidebar = ({
                 }`}>
                   <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
                   <p className="text-sm">No documents found</p>
-                  <p className="text-xs">Upload some PDFs to get started</p>
+                  <p className="text-xs">Upload some documents to get started</p>
                 </div>
               )}
             </div>
@@ -332,7 +352,7 @@ const DocumentSidebar = ({
           }`}>
             <div className="text-5xl mb-4">📄</div>
             <p className="text-sm">
-              Select a PDF above to open it with Adobe PDF Viewer
+              Select a document above to open it with viewer
             </p>
           </div>
         </div>

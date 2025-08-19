@@ -69,9 +69,6 @@ fi
 echo "🚀 Starting Adobe Contest Application..."
 cd /app
 
-# Initialize database if needed
-python init_db.py || echo "⚠️ Database initialization skipped"
-
 # Start the FastAPI application with Uvicorn
 exec uvicorn main:app --host 0.0.0.0 --port 8080 --workers 1
 EOF

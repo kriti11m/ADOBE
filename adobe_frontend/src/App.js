@@ -52,7 +52,7 @@ function App() {
   const [userProfile, setUserProfile] = useState({ role: '', task: '' });
   const [currentDocument, setCurrentDocument] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(true);
   const [recommendations, setRecommendations] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null); // Store session ID for insights
   const [showUploader, setShowUploader] = useState(false);
@@ -204,17 +204,17 @@ function App() {
     setShowTutorial(false);
     // Skip onboarding since we no longer need the persona selection
     // Mark tutorial as seen (first time experience completed)
-    localStorage.setItem('doc-a-doodle-tutorial-seen', 'true');
+    localStorage.setItem('docuverse-tutorial-seen', 'true');
     // Also mark as completed for backwards compatibility
-    localStorage.setItem('doc-a-doodle-tutorial-completed', 'true');
+    localStorage.setItem('docuverse-tutorial-completed', 'true');
   };
 
   const handleRestartTutorial = () => {
     setShowTutorial(true);
     setShowOnboarding(false);
     // Clear both tutorial flags to reset the experience
-    localStorage.removeItem('doc-a-doodle-tutorial-seen');
-    localStorage.removeItem('doc-a-doodle-tutorial-completed');
+    localStorage.removeItem('docuverse-tutorial-seen');
+    localStorage.removeItem('docuverse-tutorial-completed');
   };
 
   // Tutorial interaction handlers
@@ -1842,7 +1842,7 @@ function App() {
         {/* Floating Podcast Button */}
         <PodcastButton 
           onClick={handleFloatingPodcastClick}
-          isVisible={true}
+          isVisible={!showHomePage}
           selectedText={selectedTextData?.selectedText}
           recommendations={recommendations}
           relatedSections={relatedSections}
