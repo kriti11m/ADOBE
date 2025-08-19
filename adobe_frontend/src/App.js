@@ -11,6 +11,7 @@ import CollectionUploader from './components/CollectionUploader';
 import AIAssistant from './components/AIAssistant';
 import SmartConnections from './components/SmartConnections';
 import DocumentManager from './components/DocumentManager';
+import PodcastButton from './components/PodcastButton';
 import { Headphones, FileText, Lightbulb, Sparkles, Brain, Zap } from 'lucide-react';
 import backendService from './services/backendService';
 import part1aService from './services/part1aService';
@@ -43,11 +44,7 @@ export const useDarkMode = () => {
 
 function App() {
   // App state management
-  const [showHomePage, setShowHomePage] = useState(() => {
-    // Show home page on first visit
-    const hasSeenHomePage = localStorage.getItem('doc-a-doodle-home-seen');
-    return !hasSeenHomePage; // Show home page if user has never seen it
-  });
+  const [showHomePage, setShowHomePage] = useState(true); // Always show home page on launch
 
   // Check if user has seen tutorial before
   const [showTutorial, setShowTutorial] = useState(false); // Will be triggered from home page
@@ -79,6 +76,22 @@ function App() {
   
   // AI Assistant state
   const [showAIAssistant, setShowAIAssistant] = useState(false);
+  
+  // Insights state (shared with SmartConnections)
+  const [currentInsights, setCurrentInsights] = useState(null);
+  
+  // Floating Podcast Mode state
+  const [showFloatingAudioPlayer, setShowFloatingAudioPlayer] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioProgress, setAudioProgress] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const audioPlayerRef = useRef(null);
+  
+  // Podcast generation options
+  const [podcastVoice, setPodcastVoice] = useState('female');
+  const [podcastSpeed, setPodcastSpeed] = useState(1.0);
+  const [isRegeneratingAudio, setIsRegeneratingAudio] = useState(false);
   
   // Part 1A Integration - Document Structure
   const [pdfStructure, setPdfStructure] = useState(null);
@@ -112,7 +125,9 @@ function App() {
           status: 'uploaded',
           timestamp: new Date(doc.upload_timestamp).toLocaleDateString(),
           tags: ['PDF', 'Backend'],
-          dbDocumentId: doc.id
+          dbDocumentId: doc.id,
+          // Add URL for Adobe PDF viewer
+          url: `${process.env.REACT_APP_API_URL || 'http://localhost:8083'}/documents/${doc.id}/download`
         }));
         
         // For compatibility with existing UI, convert to collections format
@@ -123,7 +138,12 @@ function App() {
           uploadDate: doc.upload_timestamp,
           tags: ['PDF'],
           isUploaded: true,
-          documents: [doc]
+          // Add URL for Adobe PDF viewer
+          url: `${process.env.REACT_APP_API_URL || 'http://localhost:8083'}/documents/${doc.id}/download`,
+          documents: [{ 
+            ...doc, 
+            url: `${process.env.REACT_APP_API_URL || 'http://localhost:8083'}/documents/${doc.id}/download` 
+          }]
         }));
         
         // Set both arrays
@@ -171,8 +191,6 @@ function App() {
   const handleStartFromHomePage = () => {
     setShowHomePage(false);
     setShowTutorial(true);
-    // Mark home page as seen
-    localStorage.setItem('doc-a-doodle-home-seen', 'true');
   };
 
   const handleShowHomePage = () => {
@@ -245,6 +263,7 @@ function App() {
   };
 
   const handleDocumentSelect = async (document) => {
+    console.log('📄 Document selected:', document);
     setCurrentDocument(document);
     
     // Don't auto-open document outline on selection - only open after Part 1A completes
@@ -259,6 +278,7 @@ function App() {
     setPdfStructure(null);
     setCurrentSection(null);
     
+    // Documents from the library have URLs, uploaded documents have file objects
     if (document.file || document.url) {
       setIsExtractingStructure(true);
       try {
@@ -572,6 +592,54 @@ function App() {
       if (pdfViewerRef.current) {
         console.log('PDF viewer ref methods:', Object.keys(pdfViewerRef.current));
       }
+    }
+  };
+
+  // Load a document by its ID and navigate to a specific page
+  const handleLoadDocumentAndNavigate = async (documentId, pageNumber, sectionTitle = null) => {
+    try {
+      console.log(`📄 Loading document ${documentId} and navigating to page ${pageNumber}`);
+      
+      // Find the document in our documents or collections
+      let targetDocument = null;
+      
+      // Check documents array
+      targetDocument = documents.find(doc => doc.dbDocumentId === documentId || doc.id === documentId);
+      
+      // If not found, check collections
+      if (!targetDocument) {
+        for (const collection of collections) {
+          if (collection.documents) {
+            targetDocument = collection.documents.find(doc => doc.id === documentId);
+            if (targetDocument) {
+              // Add collection info
+              targetDocument = {
+                ...targetDocument,
+                fromCollection: collection
+              };
+              break;
+            }
+          }
+        }
+      }
+
+      if (!targetDocument) {
+        console.error(`Document with ID ${documentId} not found`);
+        return false;
+      }
+
+      // Load the document
+      await handleDocumentSelect(targetDocument);
+      
+      // Wait a bit for the document to load, then navigate
+      setTimeout(() => {
+        handleNavigateToSection(pageNumber, sectionTitle);
+      }, 1000);
+      
+      return true;
+    } catch (error) {
+      console.error('Error loading document and navigating:', error);
+      return false;
     }
   };
 
@@ -903,6 +971,337 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
+  // Floating podcast handlers
+  const handleFloatingPodcastClick = async () => {
+    console.log('🎧 Podcast button clicked!');
+    console.log('Current state:', {
+      audioUrl: !!audioUrl,
+      podcastData: !!podcastData,
+      selectedTextData: !!selectedTextData,
+      recommendations: recommendations?.length || 0,
+      currentInsights: !!currentInsights
+    });
+    
+    if (audioUrl) {
+      // If audio is available, show the floating player
+      console.log('🎵 Audio available, showing player');
+      setShowFloatingAudioPlayer(true);
+    } else if (podcastData) {
+      // If podcast script exists but no audio, open the podcast modal
+      console.log('📝 Podcast data exists, showing modal');
+      setShowPodcastModal(true);
+    } else {
+      // Generate podcast from current relevant sections and insights
+      console.log('🎧 Generating new podcast...');
+      await generatePodcastFromCurrentData();
+    }
+  };
+
+  // Generate podcast from current relevant sections and insights
+  const generatePodcastFromCurrentData = async () => {
+    try {
+      console.log('🎧 Starting podcast generation...');
+      console.log('Input data check:', {
+        selectedTextData,
+        recommendations: recommendations?.length || 0,
+        currentInsights: !!currentInsights,
+        currentDocument: currentDocument?.name
+      });
+      
+      // Check if we have data to work with
+      if (!selectedTextData && (!recommendations || recommendations.length === 0)) {
+        console.warn('⚠ No text selection or recommendations available');
+        alert('Please select some text first to generate relevant sections and insights, then try generating the podcast.');
+        return;
+      }
+
+      // Use the original working method
+      const selectedText = selectedTextData?.selectedText || 'No text selected';
+      const relatedSectionData = recommendations || relatedSections || [];
+
+      console.log('📊 Calling generateAudioOverview with:', {
+        selectedText: selectedText.substring(0, 100) + '...',
+        relatedSections: relatedSectionData.length,
+        audioType: 'podcast'
+      });
+
+      // Call the audio overview API with podcast mode and voice options
+      const audioBlob = await backendService.generateAudioOverview(
+        selectedText,
+        relatedSectionData,
+        'podcast',  // Use podcast mode for single narrative
+        3,  // 3-minute duration
+        podcastVoice,  // Voice setting (male/female)
+        1.0,   // Always generate at normal speed, frontend handles playback speed
+        currentInsights  // Pass the generated insights
+      );
+      
+      if (audioBlob) {
+        console.log('✅ Podcast audio generated successfully');
+        const audioUrl = URL.createObjectURL(audioBlob);
+        setAudioUrl(audioUrl);
+        setShowFloatingAudioPlayer(true);
+        
+        // Apply current speed setting after a short delay
+        setTimeout(() => {
+          if (audioPlayerRef.current) {
+            audioPlayerRef.current.playbackRate = podcastSpeed;
+          }
+        }, 100);
+
+        // Pre-generate the other voice in background for instant switching
+        const otherVoice = podcastVoice === 'female' ? 'male' : 'female';
+        setTimeout(async () => {
+          try {
+            console.log(`🔄 Pre-generating ${otherVoice} voice for instant switching...`);
+            await backendService.generateAudioOverview(
+              selectedText,
+              relatedSectionData,
+              'podcast',
+              3,
+              otherVoice,
+              1.0,
+              currentInsights  // Pass the generated insights for pre-generation too
+            );
+            console.log(`✅ ${otherVoice} voice pre-generated and cached`);
+          } catch (error) {
+            console.log(`⚠ Failed to pre-generate ${otherVoice} voice:`, error);
+          }
+        }, 2000); // Start pre-generation 2 seconds after main audio is ready
+      } else {
+        console.error('❌ Failed to generate podcast - no audio returned');
+        alert('Failed to generate podcast. Please try again.');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error generating podcast from current data:', error);
+      alert(`Error generating podcast: ${error.message}\n\nPlease check your connection and try again.`);
+    }
+  };
+
+  const regenerateAudioWithNewSettings = async (voice = podcastVoice, speed = podcastSpeed) => {
+    try {
+      setIsRegeneratingAudio(true);
+      console.log('🔄 Checking cache and regenerating audio with new voice:', { voice });
+      
+      if (!selectedTextData && (!recommendations || recommendations.length === 0)) {
+        console.warn('⚠ No text selection or recommendations available for regeneration');
+        return;
+      }
+
+      // Pause current audio if playing
+      if (audioPlayerRef.current) {
+        audioPlayerRef.current.pause();
+        setIsPlaying(false);
+      }
+
+      const selectedText = selectedTextData?.selectedText || 'No text selected';
+      const relatedSectionData = recommendations || relatedSections || [];
+
+      // Check if audio is cached for the requested voice
+      const cacheStatus = await backendService.checkAudioCache(
+        selectedText,
+        relatedSectionData,
+        'podcast',
+        3,
+        currentInsights  // Pass insights for cache checking too
+      );
+
+      if (cacheStatus.cached_voices[voice]) {
+        console.log(`✅ Using cached audio for ${voice} voice`);
+      } else {
+        console.log(`🎵 Generating new audio for ${voice} voice`);
+      }
+
+      // Call the audio overview API with new voice (speed handled by frontend)
+      const audioBlob = await backendService.generateAudioOverview(
+        selectedText,
+        relatedSectionData,
+        'podcast',  // Use podcast mode
+        3,  // 3-minute duration
+        voice,  // Updated voice setting
+        1.0,   // Always generate at normal speed, frontend handles playback speed
+        currentInsights  // Pass the generated insights
+      );
+      
+      if (audioBlob) {
+        console.log('✅ Audio available with new voice');
+        // Clean up old audio URL
+        if (audioUrl) {
+          URL.revokeObjectURL(audioUrl);
+        }
+        // Set new audio
+        const newAudioUrl = URL.createObjectURL(audioBlob);
+        setAudioUrl(newAudioUrl);
+        setPodcastVoice(voice); // Update the current voice
+        setAudioProgress(0);
+        setCurrentTime(0);
+        
+        // Apply current speed setting to new audio
+        setTimeout(() => {
+          if (audioPlayerRef.current) {
+            audioPlayerRef.current.playbackRate = speed;
+          }
+        }, 100);
+      } else {
+        console.error('❌ Failed to get audio');
+        alert('Failed to get audio with new voice. Please try again.');
+      }
+    } catch (error) {
+      console.error('❌ Error getting audio:', error);
+      alert(`Error getting audio: ${error.message}`);
+    } finally {
+      setIsRegeneratingAudio(false);
+    }
+  };
+
+  // Handle audio seeking by clicking or dragging on progress bar
+  const handleProgressBarClick = (e) => {
+    if (!audioPlayerRef.current || !audioDuration) return;
+    
+    const progressBar = e.currentTarget;
+    const rect = progressBar.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickPercent = clickX / rect.width;
+    const newTime = clickPercent * audioDuration;
+    
+    audioPlayerRef.current.currentTime = newTime;
+    setCurrentTime(newTime);
+    setAudioProgress((newTime / audioDuration) * 100);
+  };
+
+  // Handle keyboard navigation for audio player
+  const handleAudioKeyNavigation = (e) => {
+    if (!audioPlayerRef.current || !audioDuration) return;
+    
+    switch (e.key) {
+      case ' ':
+      case 'k':
+        e.preventDefault();
+        handlePlayPause();
+        break;
+      case 'ArrowLeft':
+      case 'j':
+        e.preventDefault();
+        // Skip back 10 seconds
+        const newTimeBack = Math.max(0, audioPlayerRef.current.currentTime - 10);
+        audioPlayerRef.current.currentTime = newTimeBack;
+        setCurrentTime(newTimeBack);
+        setAudioProgress((newTimeBack / audioDuration) * 100);
+        break;
+      case 'ArrowRight':
+      case 'l':
+        e.preventDefault();
+        // Skip forward 10 seconds
+        const newTimeForward = Math.min(audioDuration, audioPlayerRef.current.currentTime + 10);
+        audioPlayerRef.current.currentTime = newTimeForward;
+        setCurrentTime(newTimeForward);
+        setAudioProgress((newTimeForward / audioDuration) * 100);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        // Increase speed
+        const currentSpeed = audioPlayerRef.current.playbackRate;
+        const newSpeedUp = Math.min(2.0, currentSpeed + 0.25);
+        audioPlayerRef.current.playbackRate = newSpeedUp;
+        setPodcastSpeed(newSpeedUp);
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        // Decrease speed
+        const currentSpeedDown = audioPlayerRef.current.playbackRate;
+        const newSpeedDown = Math.max(0.5, currentSpeedDown - 0.25);
+        audioPlayerRef.current.playbackRate = newSpeedDown;
+        setPodcastSpeed(newSpeedDown);
+        break;
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+        e.preventDefault();
+        // Jump to percentage of audio (1 = 10%, 2 = 20%, etc.)
+        const percent = parseInt(e.key) / 10;
+        const jumpTime = percent * audioDuration;
+        audioPlayerRef.current.currentTime = jumpTime;
+        setCurrentTime(jumpTime);
+        setAudioProgress((jumpTime / audioDuration) * 100);
+        break;
+      case '0':
+        e.preventDefault();
+        // Jump to beginning
+        audioPlayerRef.current.currentTime = 0;
+        setCurrentTime(0);
+        setAudioProgress(0);
+        break;
+    }
+  };
+
+  const handleCloseFloatingAudioPlayer = () => {
+    setShowFloatingAudioPlayer(false);
+    setIsPlaying(false);
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.pause();
+    }
+  };
+
+  const handlePlayPause = () => {
+    if (audioPlayerRef.current) {
+      if (isPlaying) {
+        audioPlayerRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        audioPlayerRef.current.play();
+        setIsPlaying(true);
+      }
+    }
+  };
+
+  // Handle speed change via HTML5 audio playbackRate
+  const handleSpeedChange = (speed) => {
+    setPodcastSpeed(speed);
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.playbackRate = speed;
+      console.log(`🎧 Audio speed changed to ${speed}x`);
+    }
+  };
+
+  // Handle voice change (this needs regeneration)
+  const handleVoiceChange = async (newVoice) => {
+    if (newVoice !== podcastVoice) {
+      setPodcastVoice(newVoice);
+      await regenerateAudioWithNewSettings(newVoice, podcastSpeed);
+    }
+  };
+
+  const handleAudioTimeUpdate = () => {
+    if (audioPlayerRef.current) {
+      const current = audioPlayerRef.current.currentTime;
+      const duration = audioPlayerRef.current.duration;
+      setCurrentTime(current);
+      setAudioProgress((current / duration) * 100);
+    }
+  };
+
+  const handleAudioLoadedMetadata = () => {
+    if (audioPlayerRef.current) {
+      setAudioDuration(audioPlayerRef.current.duration);
+      // Apply current speed setting when audio loads
+      audioPlayerRef.current.playbackRate = podcastSpeed;
+    }
+  };
+
+  const formatTime = (seconds) => {
+    if (!seconds || isNaN(seconds)) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   // Load available TTS engines on component mount
   useEffect(() => {
     const loadTTSEngines = async () => {
@@ -917,6 +1316,21 @@ function App() {
 
     loadTTSEngines();
   }, []);
+
+  // Add keyboard event listener when audio player is shown
+  useEffect(() => {
+    if (showFloatingAudioPlayer) {
+      const handleKeyDown = (e) => {
+        // Only handle if not typing in an input field
+        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+          handleAudioKeyNavigation(e);
+        }
+      };
+      
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [showFloatingAudioPlayer, audioDuration]);
 
   // Cleanup audio URLs on unmount
   useEffect(() => {
@@ -951,6 +1365,7 @@ function App() {
           <HomePage 
             onStartTutorial={handleStartFromHomePage}
             isDarkMode={isDarkMode}
+            toggleDarkMode={toggleDarkMode}
           />
         )}
 
@@ -1058,10 +1473,13 @@ function App() {
               onGetRecommendations={setRecommendations}
               activeCollection={activeCollection}
               onNavigateToSection={handleNavigateToSection}
+              onLoadDocumentAndNavigate={handleLoadDocumentAndNavigate}
               pdfStructure={pdfStructure}
               isExtractingStructure={isExtractingStructure}
               currentSection={currentSection}
               selectedTextData={selectedTextData}
+              onPodcastGeneration={handlePodcastGeneration}
+              onInsightsGenerated={setCurrentInsights}
             />
           </div>
         </div>
@@ -1305,7 +1723,7 @@ function App() {
                           Convert your podcast script to audio using text-to-speech technology.
                         </p>
                         
-                        {availableTTSEngines && (
+                        {availableTTSEngines && availableTTSEngines.available_engines && (
                           <div className="mb-4">
                             <p className={`text-xs mb-2 ${
                               isDarkMode ? 'text-gray-500' : 'text-gray-500'
@@ -1358,6 +1776,188 @@ function App() {
           show={showAIAssistant}
           onClose={handleCloseAIAssistant}
         />
+
+        {/* Floating Podcast Button */}
+        <PodcastButton 
+          onClick={handleFloatingPodcastClick}
+          isVisible={true}
+          selectedText={selectedTextData?.selectedText}
+          recommendations={recommendations}
+          relatedSections={relatedSections}
+          currentDocument={currentDocument}
+          selectedSection={selectedTextData}
+        />
+
+        {/* Floating Audio Player */}
+        {showFloatingAudioPlayer && audioUrl && (
+          <div className="fixed bottom-6 right-6 z-50">
+            <div className={`${
+              isDarkMode 
+                ? 'bg-gray-800 border-gray-600 text-white shadow-2xl' 
+                : 'bg-white border-gray-200 text-gray-900 shadow-2xl'
+            } border rounded-2xl p-4 max-w-sm w-80`}>
+              {/* Audio Player Header */}
+              <div className="flex justify-between items-center mb-3">
+                <div className="flex items-center space-x-2">
+                  <span className="text-2xl">🎧</span>
+                  <div>
+                    <h4 className="font-medium text-sm">AI Podcast</h4>
+                    <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      {formatTime(currentTime)} / {formatTime(audioDuration)}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleCloseFloatingAudioPlayer}
+                  className={`p-1.5 rounded-full transition-colors ${
+                    isDarkMode 
+                      ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-300' 
+                      : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Progress Bar */}
+              <div 
+                className={`w-full h-2 rounded-full cursor-pointer mb-3 ${
+                  isDarkMode ? 'bg-gray-700' : 'bg-gray-200'
+                }`}
+                onClick={handleProgressBarClick}
+              >
+                <div 
+                  className="h-full bg-green-500 rounded-full transition-all duration-100"
+                  style={{ width: `${audioProgress}%` }}
+                />
+              </div>
+
+              {/* Audio Controls with Voice Switching */}
+              <div className="flex items-center justify-between mb-3">
+                {/* Left: Empty space for balance */}
+                <div className="w-16"></div>
+                
+                {/* Center: Playback Controls Group */}
+                <div className="flex items-center space-x-3">
+                  {/* Skip Back */}
+                  <button
+                    onClick={() => {
+                      const newTime = Math.max(0, currentTime - 10);
+                      audioPlayerRef.current.currentTime = newTime;
+                    }}
+                    className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors text-sm ${
+                      isDarkMode 
+                        ? 'hover:bg-gray-700 text-gray-300' 
+                        : 'hover:bg-gray-100 text-gray-600'
+                    }`}
+                  >
+                    ⏮
+                  </button>
+                  
+                  {/* Play/Pause - Perfect Circle */}
+                  <button
+                    onClick={handlePlayPause}
+                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors text-xl ${
+                      isDarkMode 
+                        ? 'bg-green-600 hover:bg-green-700 text-white' 
+                        : 'bg-green-600 hover:bg-green-700 text-white'
+                    }`}
+                    style={{ minWidth: '48px', minHeight: '48px' }}
+                  >
+                    {isPlaying ? '⏸' : '▶'}
+                  </button>
+                  
+                  {/* Skip Forward */}
+                  <button
+                    onClick={() => {
+                      const newTime = Math.min(audioDuration, currentTime + 10);
+                      audioPlayerRef.current.currentTime = newTime;
+                    }}
+                    className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors text-sm ${
+                      isDarkMode 
+                        ? 'hover:bg-gray-700 text-gray-300' 
+                        : 'hover:bg-gray-100 text-gray-600'
+                    }`}
+                  >
+                    ⏭
+                  </button>
+                </div>
+
+                {/* Right: Voice Switching */}
+                <div className="flex items-center space-x-1">
+                  <button
+                    onClick={() => handleVoiceChange('female')}
+                    disabled={isRegeneratingAudio}
+                    className={`w-6 h-6 rounded-full text-xs font-medium transition-colors flex items-center justify-center ${
+                      podcastVoice === 'female'
+                        ? (isDarkMode ? 'bg-pink-600 text-white' : 'bg-pink-600 text-white')
+                        : (isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300')
+                    } ${isRegeneratingAudio ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title="Female Voice"
+                  >
+                    ♀
+                  </button>
+                  <button
+                    onClick={() => handleVoiceChange('male')}
+                    disabled={isRegeneratingAudio}
+                    className={`w-6 h-6 rounded-full text-xs font-medium transition-colors flex items-center justify-center ${
+                      podcastVoice === 'male'
+                        ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white')
+                        : (isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300')
+                    } ${isRegeneratingAudio ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title="Male Voice"
+                  >
+                    ♂
+                  </button>
+                </div>
+              </div>
+
+              {/* Professional Speed Controls */}
+              <div className="flex justify-center items-center space-x-1 mb-2">
+                <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-500'} mr-2`}>
+                  Speed:
+                </span>
+                {[0.75, 1.0, 1.25, 1.5, 2.0].map(speed => (
+                  <button
+                    key={speed}
+                    onClick={() => handleSpeedChange(speed)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-200 min-w-[45px] ${
+                      podcastSpeed === speed
+                        ? (isDarkMode ? 'bg-green-600 text-white shadow-md' : 'bg-green-600 text-white shadow-md')
+                        : (isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300')
+                    }`}
+                  >
+                    {speed === 1.0 ? '1×' : `${speed}×`}
+                  </button>
+                ))}
+              </div>
+
+              {/* Hidden Audio Element */}
+              <audio
+                ref={audioPlayerRef}
+                src={audioUrl}
+                onTimeUpdate={handleAudioTimeUpdate}
+                onLoadedMetadata={handleAudioLoadedMetadata}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+                style={{ display: 'none' }}
+              />
+              
+              {isRegeneratingAudio && (
+                <div className={`absolute inset-0 rounded-2xl flex items-center justify-center ${
+                  isDarkMode ? 'bg-gray-800 bg-opacity-90' : 'bg-white bg-opacity-90'
+                }`}>
+                  <div className="text-center">
+                    <div className="animate-spin w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                    <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                      Switching voice...
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
             </>
         )}

@@ -417,8 +417,8 @@ async def find_relevant_sections(
         relevance_analyzer = RelevanceAnalyzer()
         text_service = TextSelectionService()
         
-        # Get all PDF documents from database for cross-document search (only those with valid file paths)
-        documents = db.query(PDFDocument).filter(PDFDocument.file_path.isnot(None)).all()
+        # Get all PDF documents from database for cross-document search
+        documents = db.query(PDFDocument).all()
         
         if not documents:
             return {
@@ -434,12 +434,7 @@ async def find_relevant_sections(
         # Process each document to extract text content and use Gemini for intelligent section detection
         for doc in documents:
             try:
-                # Skip documents without valid file paths
-                if not doc.file_path:
-                    print(f"⚠ Skipping document {doc.original_filename} - no file path in database")
-                    continue
-                    
-                if not os.path.exists(doc.file_path):
+                if not doc.file_path or not os.path.exists(doc.file_path):
                     print(f"⚠ File not found: {doc.file_path}")
                     continue
                     
@@ -506,18 +501,111 @@ async def find_relevant_sections(
                     else:
                         gemini_data = gemini_response
                     
-                    # Process Gemini's identified sections
-                    for section in gemini_data.get('relevant_sections', []):
+                    # Integrate Part 1A for accurate page extraction and section titles
+                    from app.part1a.pdf_structure_extractor import MultilingualPDFExtractor
+                    extractor = MultilingualPDFExtractor()
+                    structure = extractor.extract_structure(doc.file_path)
+                    outline = structure.get("outline", [])
+                    
+                    print(f"📋 Found {len(outline)} sections in Part 1A outline for {doc.original_filename}")
+                    
+                    def find_best_section_match(gemini_section):
+                        """Find the best matching section from Part 1A outline"""
+                        gemini_title = gemini_section.get('section_title', '').strip()
+                        gemini_content = gemini_section.get('content', '').strip()
+                        
+                        if not gemini_title and not gemini_content:
+                            return None
+                        
+                        best_match = None
+                        best_score = 0
+                        
+                        for heading in outline:
+                            if not heading.get("text"):
+                                continue
+                                
+                            heading_text = heading["text"].strip()
+                            heading_lower = heading_text.lower()
+                            
+                            score = 0
+                            
+                            # Score based on title matching
+                            if gemini_title:
+                                title_lower = gemini_title.lower()
+                                title_clean = title_lower.replace('page ', '').replace('—', '').replace('-', '').strip()
+                                heading_clean = heading_lower.replace('page ', '').replace('—', '').replace('-', '').strip()
+                                
+                                # Exact match
+                                if title_clean == heading_clean:
+                                    score += 100
+                                # Partial match
+                                elif title_clean in heading_clean or heading_clean in title_clean:
+                                    score += 70
+                                # Word overlap
+                                else:
+                                    title_words = set(word for word in title_clean.split() if len(word) > 3)
+                                    heading_words = set(word for word in heading_clean.split() if len(word) > 3)
+                                    if title_words and heading_words:
+                                        overlap = len(title_words & heading_words)
+                                        score += (overlap / max(len(title_words), len(heading_words))) * 50
+                            
+                            # Score based on content matching
+                            if gemini_content and score > 0:
+                                content_words = set(word.lower() for word in gemini_content.split() if len(word) > 4)
+                                heading_words = set(word.lower() for word in heading_text.split() if len(word) > 4)
+                                if content_words and heading_words:
+                                    content_overlap = len(content_words & heading_words)
+                                    if content_overlap > 0:
+                                        score += content_overlap * 10
+                            
+                            if score > best_score and score > 30:  # Minimum threshold
+                                best_score = score
+                                best_match = {
+                                    'title': heading_text,
+                                    'page': heading.get('page'),
+                                    'score': score
+                                }
+                        
+                        return best_match
+                    
+                    # Process Gemini sections and map to Part 1A sections
+                    for gemini_section in gemini_data.get('relevant_sections', []):
+                        # Find the best matching section from Part 1A
+                        part1a_match = find_best_section_match(gemini_section)
+                        
+                        if part1a_match:
+                            # Use Part 1A section title and page (add 1 for correct indexing)
+                            section_title = part1a_match['title']
+                            raw_page = part1a_match['page']
+                            
+                            # Add 1 to Part 1A page number for correct indexing
+                            if isinstance(raw_page, (int, float)) and raw_page >= 0:
+                                page_number = int(raw_page) + 1
+                            elif isinstance(raw_page, str) and raw_page.isdigit():
+                                page_number = int(raw_page) + 1
+                            else:
+                                page_number = raw_page  # Keep as-is if not numeric
+                                
+                            print(f"📍 Mapped to Part 1A section: '{section_title}' on page {raw_page} -> corrected to page {page_number} (score: {part1a_match['score']:.1f})")
+                        else:
+                            # Fallback to Gemini data
+                            section_title = gemini_section.get('section_title', 'Relevant Section')
+                            page_number = "N/A"
+                            print(f"⚠ No Part 1A match found for: '{section_title}'")
+                        
                         processed_section = {
-                            'content': section.get('content', ''),
-                            'section_title': section.get('section_title', 'Relevant Section'),
+                            'content': gemini_section.get('content', ''),
+                            'section_title': section_title,  # Use Part 1A title
                             'document_name': doc.original_filename,
                             'document_id': doc.id,
-                            'page': section.get('page', 'Unknown'),
-                            'relevance_score': section.get('relevance_score', 0.5),
+                            'page': page_number,  # Use Part 1A page
+                            'relevance_score': gemini_section.get('relevance_score', 0.5),
                             'metadata': {
-                                'extracted_by': 'gemini_api',
-                                'analysis_method': 'intelligent_section_detection'
+                                'extracted_by': 'gemini_with_part1a_mapping',
+                                'analysis_method': 'intelligent_section_detection',
+                                'original_gemini_title': gemini_section.get('section_title', ''),
+                                'part1a_match_score': part1a_match['score'] if part1a_match else 0,
+                                'part1a_outline_count': len(outline)
                             }
                         }
                         

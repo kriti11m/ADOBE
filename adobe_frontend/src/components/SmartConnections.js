@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, ArrowLeft, RefreshCw, Lightbulb, Zap, Brain, Sparkles, ChevronLeft, BookOpen, FileText } from 'lucide-react';
+import React, { useState } from 'react';
+import { RefreshCw, Lightbulb, Brain, ChevronLeft, BookOpen, FileText } from 'lucide-react';
 import { useDarkMode } from '../App';
 import backendService from '../services/backendService';
 import FinaleIntegrationService from '../services/finaleIntegrationService';
@@ -33,29 +33,6 @@ const mockRelatedSections = [
   },
 ];
 
-const mockInsights = {
-  keyTakeaways: [
-    "Machine learning algorithms can process vast amounts of data faster than traditional methods",
-    "Neural networks require substantial computational resources for training", 
-    "Deep learning has achieved human-level performance in many specific tasks",
-  ],
-  didYouKnow: [
-    "The first neural network was created in 1943 by Warren McCulloch and Walter Pitts",
-    "GPT-3 has 175 billion parameters, making it one of the largest language models",
-    "Computer vision models can now identify objects with 99% accuracy in controlled environments",
-  ],
-  contradictions: [
-    "While AI excels at pattern recognition, it struggles with common sense reasoning",
-    "Despite processing speed advantages, AI systems often lack the flexibility of human thinking",
-    "Advanced AI models require enormous energy consumption, contradicting sustainability goals",
-  ],
-  examples: [
-    "Netflix uses machine learning to recommend movies based on viewing history",
-    "Tesla's autopilot system employs deep learning for real-time decision making", 
-    "Medical AI can detect certain cancers more accurately than human radiologists",
-  ],
-};
-
 const SmartConnections = ({ 
   currentDocument, 
   recommendations, 
@@ -64,14 +41,15 @@ const SmartConnections = ({
   onGetRecommendations, 
   activeCollection, 
   onNavigateToSection,
+  onLoadDocumentAndNavigate,
   pdfStructure,
   isExtractingStructure,
   currentSection,
-  selectedTextData
+  selectedTextData,
+  onInsightsGenerated
 }) => {
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [sidebarView, setSidebarView] = useState('sections'); // 'sections' or 'insights'
-  const [selectedSection, setSelectedSection] = useState(null);
   const [generatedInsights, setGeneratedInsights] = useState(null);
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
   const [insightsError, setInsightsError] = useState(null);
@@ -84,12 +62,62 @@ const SmartConnections = ({
   // Format backend data to match UI structure
   const formatRelatedSections = (backendSections) => {
     return backendSections.map((section, index) => ({
-      pageNumber: section.page_number || section.pageNumber || 'N/A',
-      title: section.title || section.document_name || section.document || `Section ${index + 1}`,
+      pageNumber: section.page || section.page_number || section.pageNumber || 'N/A',
+      title: section.section_title || section.sectionTitle || section.title || `Section ${index + 1}`, // Prioritize section_title from Part 1A
       snippet: section.snippet || section.content_preview || section.text?.substring(0, 200) + '...' || 'No preview available',
       document: section.document_name || section.document || 'Unknown Document',
       relevance: section.relevance || Math.round((section.relevance_score || 0.9) * 100),
+      documentId: section.document_id || section.documentId, // Add document ID for navigation
+      documentTitle: section.document_title || section.documentTitle || section.document_name,
+      documentFilename: section.document_filename || section.documentFilename,
+      sectionTitle: section.section_title || section.sectionTitle || section.title,
     }));
+  };
+
+  // Handle jumping to a specific section in a document
+  const handleJumpToSection = async (section) => {
+    try {
+      console.log('🎯 Jumping to section:', section);
+      
+      if (!section.documentId || section.pageNumber === 'N/A') {
+        console.warn('Cannot navigate: missing document ID or page number');
+        return;
+      }
+
+      // Handle decimal page numbers (e.g., "2.3" -> page 2)
+      const pageNum = parseInt(parseFloat(section.pageNumber));
+      if (isNaN(pageNum) || pageNum < 1) {
+        console.warn('Invalid page number:', section.pageNumber);
+        return;
+      }
+
+      console.log(`📍 Navigating to page ${pageNum} from page number "${section.pageNumber}"`);
+
+      // Check if this section is from the currently loaded document
+      const isCurrentDocument = currentDocument && 
+        (currentDocument.dbDocumentId === section.documentId || 
+         currentDocument.id === section.documentId);
+
+      if (isCurrentDocument) {
+        // Navigate within current document - only pass page number
+        if (onNavigateToSection) {
+          console.log(`🎯 Navigating to page ${pageNum} in current document`);
+          await onNavigateToSection(pageNum);
+        } else {
+          console.warn('Navigation function not available');
+        }
+      } else {
+        // Load different document and then navigate
+        if (onLoadDocumentAndNavigate) {
+          console.log(`🎯 Loading document ${section.documentId} and navigating to page ${pageNum}`);
+          await onLoadDocumentAndNavigate(section.documentId, pageNum, section.sectionTitle || section.title);
+        } else {
+          console.warn('Cross-document navigation function not available');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error jumping to section:', error);
+    }
   };
 
   // Format backend insights to match UI structure
@@ -335,10 +363,36 @@ const SmartConnections = ({
   // Handle section click with navigation
   const handleSectionClick = (section) => {
     console.log('📍 Section clicked:', section);
-    setSelectedSection(section);
     
-    if (onNavigateToSection && typeof onNavigateToSection === 'function') {
-      onNavigateToSection(section);
+    if (!section.pageNumber || section.pageNumber === 'N/A') {
+      console.warn('Cannot navigate: invalid page number');
+      return;
+    }
+
+    // Handle decimal page numbers (e.g., "2.3" -> page 2)
+    const pageNum = parseInt(parseFloat(section.pageNumber));
+    if (isNaN(pageNum) || pageNum < 1) {
+      console.warn('Invalid page number for navigation:', section.pageNumber);
+      return;
+    }
+
+    // Check if this section is from the currently loaded document
+    const isCurrentDocument = currentDocument && 
+      (currentDocument.dbDocumentId === section.documentId || 
+       currentDocument.id === section.documentId);
+
+    if (isCurrentDocument) {
+      // Navigate within current document - only pass page number
+      if (onNavigateToSection && typeof onNavigateToSection === 'function') {
+        console.log(`🎯 Navigating to page ${pageNum} in current document`);
+        onNavigateToSection(pageNum);
+      }
+    } else {
+      // Load different document and then navigate
+      if (onLoadDocumentAndNavigate && typeof onLoadDocumentAndNavigate === 'function') {
+        console.log(`🎯 Loading document ${section.documentId} and navigating to page ${pageNum}`);
+        onLoadDocumentAndNavigate(section.documentId, pageNum, section.sectionTitle || section.title);
+      }
     }
   };
 
@@ -463,15 +517,34 @@ const SmartConnections = ({
                     {relatedSections.slice(0, 5).map((section, index) => (
                       <div
                         key={index}
-                        className={`p-3 rounded-xl ${isDarkMode ? "bg-slate-700/50 hover:bg-slate-700 border-slate-600" : "bg-white/80 hover:bg-white border-gray-200"} border transition-all duration-300 hover:shadow-lg cursor-pointer group`}
-                        onClick={() => handleSectionClick(section)}
+                        className={`p-3 rounded-xl ${isDarkMode ? "bg-slate-700/50 hover:bg-slate-700 border-slate-600" : "bg-white/80 hover:bg-white border-gray-200"} border transition-all duration-300 hover:shadow-lg group`}
                       >
                         <div className="flex items-start justify-between mb-2">
-                          <span
-                            className={`text-xs px-2 py-1 rounded-full ${isDarkMode ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"} font-medium`}
-                          >
-                            Page {section.pageNumber}
-                          </span>
+                          <div className="flex items-center gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (section.pageNumber !== 'N/A' && section.documentId) {
+                                    handleJumpToSection(section);
+                                  }
+                                }}
+                                className={`text-xs px-2 py-1 rounded-full font-medium transition-colors ${
+                                  section.pageNumber !== 'N/A' && section.documentId
+                                    ? (isDarkMode 
+                                        ? "bg-green-900/50 text-green-300 hover:bg-green-800/70" 
+                                        : "bg-green-100 text-green-700 hover:bg-green-200")
+                                    : (isDarkMode 
+                                        ? "bg-gray-700 text-gray-400 cursor-not-allowed" 
+                                        : "bg-gray-200 text-gray-500 cursor-not-allowed")
+                                }`}
+                                title={section.pageNumber !== 'N/A' && section.documentId
+                                  ? `Jump to page ${section.pageNumber} in ${section.documentFilename || 'document'}`
+                                  : 'Navigation unavailable for this section'}
+                                disabled={section.pageNumber === 'N/A' || !section.documentId}
+                              >
+                                🎯 Jump to Section
+                              </button>
+                          </div>
                           {section.relevance && (
                             <div className={`text-xs px-2 py-1 rounded ${
                               section.relevance > 80 ? 'bg-green-500/20 text-green-600' :
@@ -487,9 +560,14 @@ const SmartConnections = ({
                         >
                           {section.title}
                         </h5>
-                        <p className={`text-xs ${isDarkMode ? "text-slate-400" : "text-gray-600"} leading-relaxed`}>
+                        <p className={`text-xs ${isDarkMode ? "text-slate-400" : "text-gray-600"} leading-relaxed mb-2`}>
                           {section.snippet}
                         </p>
+                        {section.documentFilename && (
+                          <div className={`text-xs ${isDarkMode ? "text-slate-500" : "text-gray-500"} italic`}>
+                            From: {section.documentFilename}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

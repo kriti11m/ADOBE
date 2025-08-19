@@ -218,7 +218,7 @@ const FinalAdobePDFViewer = forwardRef(({
     }
   };
 
-  // Show enhanced floating action menu for text selection
+  // Store selected text and automatically trigger Smart Connections panel update
   const showTextSelectionActions = (selectedText, isRealPDFSelection = false) => {
     // Store the selected text for later use
     console.log('💾 Storing selected text:', selectedText, 'Real selection:', isRealPDFSelection);
@@ -232,195 +232,8 @@ const FinalAdobePDFViewer = forwardRef(({
       return; // Don't override real selection with test selection
     }
     
-    // Remove existing menu if present
-    hideTextSelectionActions();
-    
-    const actionMenu = document.createElement('div');
-    actionMenu.id = 'finale-text-selection-action';
-    actionMenu.style.cssText = `
-      position: fixed;
-      top: 100px;
-      right: 20px;
-      background: white;
-      border-radius: 16px;
-      box-shadow: 0 12px 40px rgba(0,0,0,0.2);
-      z-index: 10000;
-      min-width: 260px;
-      border: 1px solid rgba(0,0,0,0.1);
-      overflow: hidden;
-    `;
-    
-    actionMenu.innerHTML = `
-      <div style="
-        padding: 16px 20px 12px 20px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        font-weight: 600;
-        font-size: 14px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      ">
-        <span style="font-size: 18px;">✨</span>
-        <span>Analyze Selected Text</span>
-      </div>
-      <div style="padding: 8px;">
-        <button id="ai-assistant-btn" style="
-          width: 100%;
-          padding: 12px 16px;
-          border: none;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          border-radius: 8px;
-          font-size: 13px;
-          font-weight: 500;
-          cursor: pointer;
-          margin-bottom: 6px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          transition: all 0.2s ease;
-        " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(102,126,234,0.3)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
-          🧠 AI Assistant
-          <span style="margin-left: auto; font-size: 11px; opacity: 0.8;">Gemini Insights</span>
-        </button>
-        
-        <button id="smart-connections-btn" style="
-          width: 100%;
-          padding: 12px 16px;
-          border: none;
-          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-          color: white;
-          border-radius: 8px;
-          font-size: 13px;
-          font-weight: 500;
-          cursor: pointer;
-          margin-bottom: 6px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          transition: all 0.2s ease;
-        " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(16,185,129,0.3)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
-          🔗 Smart Connections
-          <span style="margin-left: auto; font-size: 11px; opacity: 0.8;">Find Related</span>
-        </button>
-        
-        <button id="podcast-mode-btn" style="
-          width: 100%;
-          padding: 12px 16px;
-          border: none;
-          background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-          color: white;
-          border-radius: 8px;
-          font-size: 13px;
-          font-weight: 500;
-          cursor: pointer;
-          margin-bottom: 6px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          transition: all 0.2s ease;
-        " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(245,158,11,0.3)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
-          🎧 Podcast Mode
-          <span style="margin-left: auto; font-size: 11px; opacity: 0.8;">Audio Summary</span>
-        </button>
-        
-        <button id="close-menu-btn" style="
-          width: 100%;
-          padding: 8px 16px;
-          border: 1px solid #e5e7eb;
-          background: #f9fafb;
-          color: #6b7280;
-          border-radius: 8px;
-          font-size: 12px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        " onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#f9fafb'">
-          Cancel
-        </button>
-      </div>
-    `;
-    
-    // Add event listeners
-    const aiBtn = actionMenu.querySelector('#ai-assistant-btn');
-    const smartBtn = actionMenu.querySelector('#smart-connections-btn');
-    const podcastBtn = actionMenu.querySelector('#podcast-mode-btn');
-    const closeBtn = actionMenu.querySelector('#close-menu-btn');
-    
-    aiBtn.onclick = async () => {
-      console.log('🧠 AI Assistant clicked for text:', selectedText.substring(0, 50) + '...');
-      aiBtn.innerHTML = '⏳ Generating AI Insights...';
-      aiBtn.style.opacity = '0.7';
-      
-      try {
-        // Pass the text directly from the closure
-        await handleTextSelection('ai-assistant', selectedText);
-        
-        hideTextSelectionActions();
-      } catch (error) {
-        console.error('❌ AI Assistant error:', error);
-        aiBtn.innerHTML = '❌ Error occurred';
-        setTimeout(hideTextSelectionActions, 2000);
-      }
-    };
-    
-    smartBtn.onclick = async () => {
-      console.log('🔗 Smart Connections clicked for text:', selectedText.substring(0, 50) + '...');
-      smartBtn.innerHTML = '⏳ Finding Related Sections...';
-      smartBtn.style.opacity = '0.7';
-      
-      try {
-        // Pass the text directly from the closure
-        await handleTextSelection('smart-connections', selectedText);
-        
-        smartBtn.innerHTML = '✅ Found Related Sections!';
-        setTimeout(hideTextSelectionActions, 2000);
-      } catch (error) {
-        console.error('❌ Smart Connections error:', error);
-        smartBtn.innerHTML = '❌ Error occurred';
-        setTimeout(hideTextSelectionActions, 2000);
-      }
-    };
-    
-    podcastBtn.onclick = async () => {
-      console.log('🎧 Podcast Mode clicked for text:', selectedText.substring(0, 50) + '...');
-      podcastBtn.innerHTML = '⏳ Creating Audio Summary...';
-      podcastBtn.style.opacity = '0.7';
-      
-      try {
-        // Pass the text directly from the closure
-        await handleTextSelection('podcast-mode', selectedText);
-        
-        podcastBtn.innerHTML = '✅ Podcast Generated!';
-        setTimeout(hideTextSelectionActions, 2000);
-      } catch (error) {
-        console.error('❌ Podcast Mode error:', error);
-        podcastBtn.innerHTML = '❌ Error occurred';
-        setTimeout(hideTextSelectionActions, 2000);
-      }
-    };
-    
-    closeBtn.onclick = () => {
-      hideTextSelectionActions();
-    };
-    
-    document.body.appendChild(actionMenu);
-    
-    // Auto-hide after 15 seconds
-    setTimeout(() => {
-      hideTextSelectionActions();
-    }, 15000);
-  };
-
-  // Hide text selection action menu
-  const hideTextSelectionActions = () => {
-    const existingButton = document.getElementById('finale-text-selection-action');
-    if (existingButton) {
-      existingButton.remove();
-    }
-    // Clear stored selected text
-    setCurrentSelectedText('');
+    // No popup menu - text selection automatically updates Smart Connections panel
+    console.log('✅ Text selection stored - use Smart Connections panel to analyze');
   };
 
   // Show notification for text selection
@@ -497,21 +310,30 @@ const FinalAdobePDFViewer = forwardRef(({
         divId: "adobe-dc-view"
       });
 
-      // Build content descriptor: support either backend URL (file_path), local File object, or database document
+      // Build content descriptor: support URL, local File object, file_path, or database document
       let contentDescriptor = null;
-      let metaFileName = selectedDocument.name || selectedDocument.file?.name || 'document.pdf';
+      let metaFileName = selectedDocument.name || selectedDocument.original_filename || selectedDocument.file?.name || 'document.pdf';
+      
       if (selectedDocument.file && selectedDocument.file.arrayBuffer) {
+        // Handle uploaded File objects
+        console.log('📄 Loading PDF from File object:', metaFileName);
         const arrayBuffer = await selectedDocument.file.arrayBuffer();
         contentDescriptor = { content: { promise: Promise.resolve(arrayBuffer) }, metaData: { fileName: metaFileName } };
+      } else if (selectedDocument.url) {
+        // Handle documents with direct URLs (from document library)
+        console.log('📄 Loading PDF from URL:', selectedDocument.url);
+        contentDescriptor = { content: { location: { url: selectedDocument.url } }, metaData: { fileName: metaFileName } };
       } else if (selectedDocument.file_path) {
-        console.log('📄 Loading PDF file by URL:', selectedDocument.file_path);
+        // Handle legacy backend file paths
+        console.log('📄 Loading PDF file by file path:', selectedDocument.file_path);
         contentDescriptor = { content: { location: { url: `http://localhost:8000/files/${selectedDocument.file_path}` } }, metaData: { fileName: metaFileName } };
       } else if (selectedDocument.dbDocumentId) {
+        // Handle database documents via blob URL
         console.log(`📥 Fetching database document ${selectedDocument.dbDocumentId} as blob...`);
         const blobUrl = await collectionService.getDocumentBlobUrl(selectedDocument.dbDocumentId);
         contentDescriptor = { content: { location: { url: blobUrl } }, metaData: { fileName: metaFileName } };
       } else {
-        throw new Error('Selected document has neither file, file_path, nor dbDocumentId');
+        throw new Error('Selected document has no valid source (file, url, file_path, or dbDocumentId)');
       }
 
       // Preview the PDF file and get viewer instance
@@ -687,8 +509,8 @@ const FinalAdobePDFViewer = forwardRef(({
             }
           }
         } else {
-          // Hide action button when selection is cleared
-          hideTextSelectionActions();
+          // No action needed when selection is cleared
+          console.log('📝 Text selection cleared');
         }
       });
 
@@ -759,7 +581,8 @@ const FinalAdobePDFViewer = forwardRef(({
             console.log('🖱️ Document mouseup with substantial text:', selectedText);
             const adobeContainer = document.getElementById('adobe-dc-view');
             if (adobeContainer) {
-              showTextSelectionActions(selectedText, true); // Mark as real PDF selection
+              // Directly update Smart Connections panel - no popup
+              handleTextSelection('smart-connections', selectedText);
             }
           }
         }, 150);
@@ -800,17 +623,11 @@ const FinalAdobePDFViewer = forwardRef(({
                   lastSelectedText = currentText;
                   isProcessingSelection = true;
                   
-                  // Show the action menu for the selected text
+                  // Directly update Smart Connections panel - no popup
                   showTextSelectionActions(currentText, true);
                   
-                  // Also notify the parent component about the selection
-                  if (onSectionHighlight) {
-                    onSectionHighlight({
-                      selectedText: currentText,
-                      relatedSections: [],
-                      action: 'pdf-selection'
-                    });
-                  }
+                  // Also directly trigger backend analysis
+                  await handleTextSelection('smart-connections', currentText);
                   
                   // Reset processing flag after a delay
                   setTimeout(() => {
@@ -823,7 +640,7 @@ const FinalAdobePDFViewer = forwardRef(({
                   console.log('📝 Adobe API: Text selection cleared');
                   lastSelectedText = '';
                   isProcessingSelection = false;
-                  hideTextSelectionActions();
+                  // No action needed - text selection just cleared
                 }
               }
             } else {
@@ -911,16 +728,6 @@ const FinalAdobePDFViewer = forwardRef(({
     }
   };
 
-  // Test function for finale features - can be triggered manually
-  const testFinaleFeatures = async () => {
-    console.log('🧪 Testing finale features manually...');
-    const testText = "Adobe Acrobat's generative AI features revolutionize document workflows";
-    await handleTextSelection({ text: testText });
-    showTextSelectionActions(testText);
-  };
-
-  // (Removed document auto-loading helpers to revert to original simple approach)
-
   // Initialize when document changes
   useEffect(() => {
     if (selectedDocument) {
@@ -932,60 +739,6 @@ const FinalAdobePDFViewer = forwardRef(({
       }
     };
   }, [selectedDocument]);
-
-  // Test Adobe's getSelectedContent API directly
-  const testAdobeSelection = async () => {
-    console.log('🧪 Testing Adobe getSelectedContent API...');
-    try {
-      if (adobeAPIs?.getSelectedContent) {
-        const selectedContent = await adobeAPIs.getSelectedContent();
-        console.log('📋 Adobe getSelectedContent result:', selectedContent);
-        
-        if (selectedContent?.data) {
-          let currentText = '';
-          
-          // Handle different data formats from Adobe API
-          if (typeof selectedContent.data === 'string') {
-            // Data is already a string
-            currentText = selectedContent.data.trim();
-          } else if (Array.isArray(selectedContent.data)) {
-            // Data is an array of objects with text property
-            currentText = selectedContent.data.map(item => item.text || '').join(' ').trim();
-          } else if (selectedContent.data.text) {
-            // Data is an object with text property
-            currentText = selectedContent.data.text.trim();
-          } else {
-            // Try to convert to string
-            currentText = String(selectedContent.data).trim();
-          }
-          
-          console.log('✅ Successfully got text from Adobe API:', currentText);
-          if (currentText && currentText.length > 5) {
-            showTextSelectionActions(currentText, true);
-            showTextSelectionNotification(`Adobe API found: "${currentText.substring(0, 50)}..."`);
-          } else {
-            showTextSelectionNotification('Adobe API returned empty text');
-          }
-        } else {
-          showTextSelectionNotification('No text selected in PDF - please select some text first');
-          console.log('📝 Adobe API: No text currently selected');
-        }
-      } else {
-        console.log('❌ Adobe getSelectedContent API not available');
-        showTextSelectionNotification('Adobe text selection API not available');
-      }
-    } catch (error) {
-      console.error('❌ Error testing Adobe selection:', error);
-      showTextSelectionNotification('Error accessing Adobe text selection API');
-    }
-  };
-
-  // Test text selection functionality
-  const testTextSelection = () => {
-    const testText = "This is a test selection to verify the text selection functionality works correctly.";
-    console.log('🧪 Testing text selection with sample text:', testText);
-    showTextSelectionActions(testText);
-  };
 
   // Show placeholder when no document is selected
   if (!selectedDocument) {
@@ -1012,41 +765,12 @@ const FinalAdobePDFViewer = forwardRef(({
   // Always render the container to ensure the divId exists when document is selected
   return (
     <div className={`relative h-full w-full ${className}`}>
-            {/* Test Button and Instructions for Text Selection */}
-      <div className="absolute top-2 right-2 z-50 space-y-2">
-        <button
-          onClick={testAdobeSelection}
-          className="px-3 py-1 bg-purple-600 text-white text-xs rounded hover:bg-purple-700 transition-colors"
-          title="Test Adobe PDF text selection API"
-        >
-          🔍 Get PDF Selection
-        </button>
-        <button
-          onClick={testTextSelection}
-          className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
-          title="Test Text Selection Menu"
-        >
-          🧪 Test Selection
-        </button>
-      </div>
-      
       <div 
         id="adobe-dc-view" 
         ref={viewerRef}
         className="h-full w-full"
         style={{ minHeight: '600px' }}
       />
-      
-      {/* Test Button for Finale Features */}
-      {viewerReady && !isLoading && !error && (
-        <button
-          onClick={testFinaleFeatures}
-          className="absolute top-4 left-4 z-50 bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded-lg text-sm font-medium shadow-lg transition-all duration-200"
-          title="Test Finale Features - Simulates text selection"
-        >
-          🧪 Test Text Selection
-        </button>
-      )}
       
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80 dark:bg-gray-800/80">

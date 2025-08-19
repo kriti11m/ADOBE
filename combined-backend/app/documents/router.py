@@ -3,9 +3,11 @@ PDF Documents Router
 Handles PDF document CRUD operations
 """
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
+import os
 
 from app.services.pdf_service import PDFDocumentService
 
@@ -59,6 +61,27 @@ async def get_document(document_id: int):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve document: {str(e)}")
+
+@router.get("/{document_id}/download")
+async def download_document(document_id: int):
+    """Download a PDF document file"""
+    try:
+        document = PDFDocumentService.get_document_by_id(document_id)
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        if not document.file_path or not os.path.exists(document.file_path):
+            raise HTTPException(status_code=404, detail="Document file not found on disk")
+        
+        return FileResponse(
+            path=document.file_path,
+            filename=document.original_filename,
+            media_type='application/pdf'
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to download document: {str(e)}")
 
 @router.post("/upload", response_model=PDFDocumentResponse)
 async def upload_document(

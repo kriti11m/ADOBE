@@ -94,7 +94,7 @@ class CollectionService {
   // Get PDF document as blob URL for Adobe Embed API
   async getDocumentBlobUrl(documentId) {
     try {
-      const response = await fetch(`${API_BASE_URL}/history/document/${documentId}/blob`);
+      const response = await fetch(`${API_BASE_URL}/documents/${documentId}/download`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

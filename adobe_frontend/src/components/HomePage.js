@@ -1,13 +1,59 @@
 import React from 'react';
-import { FileText, Zap, Brain, Users, ArrowRight, Sparkles, Code, Heart } from 'lucide-react';
+import { FileText, Zap, Brain, Users, ArrowRight, Sparkles, Code, Heart, Sun, Moon } from 'lucide-react';
 
-const HomePage = ({ onStartTutorial, isDarkMode }) => {
+const HomePage = ({ onStartTutorial, isDarkMode, toggleDarkMode }) => {
   return (
     <div className={`min-h-screen flex flex-col transition-all duration-500 ${
       isDarkMode 
         ? 'bg-gradient-to-br from-gray-900 via-blue-900/20 to-purple-900/20 text-white' 
         : 'bg-gradient-to-br from-blue-50/50 via-indigo-50/50 to-purple-50/50 text-gray-900'
     }`}>
+      
+      {/* Beautiful Dark Mode Toggle - Top Right */}
+      <div className="absolute top-6 right-6 z-20">
+        <button
+          onClick={toggleDarkMode}
+          className={`group relative w-10 h-10 rounded-full backdrop-blur-lg border-0 transition-all duration-500 hover:scale-110 focus:outline-none focus:ring-0 focus:ring-offset-0 ${
+            isDarkMode 
+              ? 'bg-transparent hover:bg-gray-800/30 text-yellow-400 focus:bg-gray-800/20' 
+              : 'bg-transparent hover:bg-white/20 text-gray-700 focus:bg-white/30'
+          } hover:shadow-lg`}
+          title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        >
+          {/* Background Glow Effect - Only on hover/focus */}
+          <div className={`absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 group-focus:opacity-50 transition-opacity duration-300 ${
+            isDarkMode ? 'bg-yellow-400/5' : 'bg-blue-400/5'
+          }`}></div>
+          
+          {/* Icon Container with Rotation Animation */}
+          <div className="relative flex items-center justify-center w-full h-full">
+            <div className={`transform transition-all duration-500 ${isDarkMode ? 'rotate-0' : 'rotate-180'}`}>
+              {isDarkMode ? (
+                <Sun className="w-4 h-4 transition-all duration-500 group-hover:rotate-12 drop-shadow-sm" />
+              ) : (
+                <Moon className="w-4 h-4 transition-all duration-500 group-hover:-rotate-12 drop-shadow-sm" />
+              )}
+            </div>
+          </div>
+          
+          {/* Subtle Shine Effect - Only on hover */}
+          <div className={`absolute inset-0 rounded-full transition-opacity duration-300 opacity-0 group-hover:opacity-100 ${
+            isDarkMode 
+              ? 'bg-gradient-to-tr from-transparent via-yellow-400/5 to-transparent' 
+              : 'bg-gradient-to-tr from-transparent via-white/10 to-transparent'
+          }`}></div>
+          
+          {/* Floating Particles Effect */}
+          <div className="absolute inset-0 overflow-hidden rounded-full">
+            <div className={`absolute top-1.5 right-2 w-0.5 h-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-1000 ${
+              isDarkMode ? 'bg-yellow-300' : 'bg-blue-300'
+            } group-hover:animate-pulse`}></div>
+            <div className={`absolute bottom-2 left-1.5 w-0.5 h-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-1000 delay-200 ${
+              isDarkMode ? 'bg-yellow-300' : 'bg-blue-300'
+            } group-hover:animate-pulse`}></div>
+          </div>
+        </button>
+      </div>
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className={`absolute top-1/4 left-1/4 w-64 h-64 rounded-full blur-3xl opacity-20 animate-pulse ${

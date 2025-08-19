@@ -8,7 +8,6 @@ const DocumentManager = ({ isDarkMode, onClose, onDocumentDeleted }) => {
   const [error, setError] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState({});
   const [clearLoading, setClearLoading] = useState(false);
-  const [repairLoading, setRepairLoading] = useState(false);
   const [showConfirmClear, setShowConfirmClear] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(null);
 
@@ -93,31 +92,6 @@ const DocumentManager = ({ isDarkMode, onClose, onDocumentDeleted }) => {
     }
   };
 
-  const handleRepairMissingPaths = async () => {
-    try {
-      setRepairLoading(true);
-      
-      const response = await fetch('http://localhost:8083/collections/repair-missing-paths', {
-        method: 'POST'
-      });
-      
-      const data = await response.json();
-      
-      if (response.ok) {
-        // Refresh documents list to see repaired items
-        await fetchDocuments();
-        console.log('Repair completed:', data);
-      } else {
-        setError(data.detail || 'Failed to repair missing paths');
-      }
-    } catch (err) {
-      console.error('Error repairing paths:', err);
-      setError('Failed to repair missing paths');
-    } finally {
-      setRepairLoading(false);
-    }
-  };
-
   const formatFileSize = (bytes) => {
     if (!bytes) return 'Unknown';
     const k = 1024;
@@ -186,40 +160,31 @@ const DocumentManager = ({ isDarkMode, onClose, onDocumentDeleted }) => {
         </div>
 
         {/* Action Buttons */}
-        <div className={`p-4 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-          <div className="flex gap-3">
+        <div className={`px-6 py-3 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+          <div className="flex gap-2">
             <button
               onClick={() => setShowConfirmClear(true)}
               disabled={clearLoading || documents.length === 0}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-lg transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-              {clearLoading ? 'Clearing...' : 'Clear All History'}
-            </button>
-
-            <button
-              onClick={handleRepairMissingPaths}
-              disabled={repairLoading || missingFilesCount === 0}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                 isDarkMode 
-                  ? 'bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400' 
-                  : 'bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300'
-              } text-white`}
+                  ? 'text-red-400 hover:text-red-300 hover:bg-red-900/20 disabled:text-red-600 disabled:hover:bg-transparent' 
+                  : 'text-red-600 hover:text-red-700 hover:bg-red-50 disabled:text-red-400 disabled:hover:bg-transparent'
+              } disabled:cursor-not-allowed`}
             >
-              <RefreshCw className={`w-4 h-4 ${repairLoading ? 'animate-spin' : ''}`} />
-              {repairLoading ? 'Repairing...' : `Repair Missing Files (${missingFilesCount})`}
+              <Trash2 className="w-3.5 h-3.5" />
+              {clearLoading ? 'Clearing...' : 'Clear All History'}
             </button>
 
             <button
               onClick={fetchDocuments}
               disabled={loading}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                 isDarkMode 
-                  ? 'bg-gray-700 hover:bg-gray-600' 
-                  : 'bg-gray-200 hover:bg-gray-300'
-              }`}
+                  ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700/50 disabled:text-gray-600' 
+                  : 'text-gray-600 hover:text-gray-700 hover:bg-gray-100 disabled:text-gray-400'
+              } disabled:cursor-not-allowed`}
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
           </div>
@@ -245,56 +210,61 @@ const DocumentManager = ({ isDarkMode, onClose, onDocumentDeleted }) => {
         <div className="flex-1 overflow-y-auto p-4 max-h-96">
           {loading ? (
             <div className="flex justify-center items-center py-8">
-              <RefreshCw className="w-6 h-6 animate-spin" />
-              <span className="ml-2">Loading documents...</span>
+              <RefreshCw className="w-5 h-5 animate-spin text-gray-400" />
+              <span className={`ml-2 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Loading documents...</span>
             </div>
           ) : documents.length === 0 ? (
             <div className="text-center py-8">
-              <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium">No documents found</p>
-              <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              <FileText className={`w-10 h-10 mx-auto mb-3 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`} />
+              <p className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>No documents found</p>
+              <p className={`text-sm mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
                 Upload some PDFs to see them here
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {documents.map(doc => (
                 <div
                   key={doc.id}
-                  className={`p-4 rounded-lg border transition-colors ${
+                  className={`p-3 rounded-lg border transition-all duration-200 ${
                     isDarkMode 
-                      ? 'bg-gray-800 border-gray-700 hover:bg-gray-750' 
-                      : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                      ? 'bg-gray-800/50 border-gray-700/50 hover:bg-gray-800 hover:border-gray-600' 
+                      : 'bg-gray-50/80 border-gray-200/60 hover:bg-white hover:border-gray-300 hover:shadow-sm'
                   }`}
                 >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
+                  <div className="flex justify-between items-center">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <FileText className="w-4 h-4" />
-                        <h3 className="font-medium">{doc.filename}</h3>
-                        <div className="flex items-center gap-1">
+                        <FileText className={`w-4 h-4 flex-shrink-0 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+                        <h3 className={`font-medium text-sm truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                          {doc.original_filename || doc.filename}
+                        </h3>
+                        <div className="flex items-center gap-1 flex-shrink-0">
                           {doc.file_exists ? (
-                            <CheckCircle className="w-4 h-4 text-green-500" />
+                            <CheckCircle className="w-3.5 h-3.5 text-green-500" />
                           ) : (
-                            <AlertCircle className="w-4 h-4 text-red-500" />
+                            <AlertCircle className="w-3.5 h-3.5 text-red-500" />
                           )}
-                          <span className={`text-xs ${doc.file_exists ? 'text-green-500' : 'text-red-500'}`}>
+                          <span className={`text-xs font-medium ${doc.file_exists ? 'text-green-600' : 'text-red-600'}`}>
                             {doc.file_exists ? 'Available' : 'Missing'}
                           </span>
                         </div>
                       </div>
-                      <div className={`text-sm mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                        <div>ID: {doc.id} | Size: {formatFileSize(doc.file_size)}</div>
-                        <div>Uploaded: {formatDate(doc.upload_date)}</div>
-                        {doc.file_path && (
-                          <div className="truncate">Path: {doc.file_path}</div>
-                        )}
+                      <div className={`text-xs mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'} flex items-center gap-3`}>
+                        <span>ID: {doc.id}</span>
+                        <span>{formatFileSize(doc.file_size)}</span>
+                        <span>{formatDate(doc.upload_date)}</span>
                       </div>
                     </div>
                     <button
                       onClick={() => setShowConfirmDelete(doc)}
                       disabled={deleteLoading[doc.id]}
-                      className="p-2 text-red-500 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
+                      className={`p-1.5 rounded-md transition-colors ml-3 flex-shrink-0 ${
+                        isDarkMode 
+                          ? 'text-red-400 hover:text-red-300 hover:bg-red-900/20' 
+                          : 'text-red-500 hover:text-red-600 hover:bg-red-50'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                      title="Delete document"
                     >
                       {deleteLoading[doc.id] ? (
                         <RefreshCw className="w-4 h-4 animate-spin" />
@@ -311,19 +281,19 @@ const DocumentManager = ({ isDarkMode, onClose, onDocumentDeleted }) => {
 
         {/* Confirm Clear All Dialog */}
         {showConfirmClear && (
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-xl">
-            <div className={`p-6 rounded-lg shadow-lg ${
-              isDarkMode ? 'bg-gray-800' : 'bg-white'
+          <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-xl">
+            <div className={`p-6 rounded-xl shadow-2xl max-w-md mx-4 ${
+              isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
             }`}>
-              <h3 className="text-lg font-bold text-red-500 mb-2">Clear All History?</h3>
-              <p className={`mb-4 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              <h3 className="text-lg font-semibold text-red-500 mb-2">Clear All History?</h3>
+              <p className={`mb-6 text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                 This will permanently delete all uploaded documents and collections. This action cannot be undone.
               </p>
-              <div className="flex gap-3">
+              <div className="flex gap-3 justify-end">
                 <button
                   onClick={() => setShowConfirmClear(false)}
-                  className={`px-4 py-2 rounded-lg ${
-                    isDarkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    isDarkMode ? 'text-gray-300 hover:text-white hover:bg-gray-700' : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'
                   }`}
                 >
                   Cancel
@@ -331,7 +301,7 @@ const DocumentManager = ({ isDarkMode, onClose, onDocumentDeleted }) => {
                 <button
                   onClick={handleClearAllHistory}
                   disabled={clearLoading}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-lg"
+                  className="px-4 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-lg transition-colors disabled:cursor-not-allowed"
                 >
                   {clearLoading ? 'Clearing...' : 'Clear All'}
                 </button>
@@ -342,19 +312,19 @@ const DocumentManager = ({ isDarkMode, onClose, onDocumentDeleted }) => {
 
         {/* Confirm Delete Document Dialog */}
         {showConfirmDelete && (
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-xl">
-            <div className={`p-6 rounded-lg shadow-lg max-w-md ${
-              isDarkMode ? 'bg-gray-800' : 'bg-white'
+          <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-xl">
+            <div className={`p-6 rounded-xl shadow-2xl max-w-md mx-4 ${
+              isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
             }`}>
-              <h3 className="text-lg font-bold text-red-500 mb-2">Delete Document?</h3>
-              <p className={`mb-4 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                Are you sure you want to delete "{showConfirmDelete.filename}"? This action cannot be undone.
+              <h3 className="text-lg font-semibold text-red-500 mb-2">Delete Document?</h3>
+              <p className={`mb-6 text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                Are you sure you want to delete <span className="font-medium">"{showConfirmDelete.original_filename || showConfirmDelete.filename}"</span>? This action cannot be undone.
               </p>
-              <div className="flex gap-3">
+              <div className="flex gap-3 justify-end">
                 <button
                   onClick={() => setShowConfirmDelete(null)}
-                  className={`px-4 py-2 rounded-lg ${
-                    isDarkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    isDarkMode ? 'text-gray-300 hover:text-white hover:bg-gray-700' : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'
                   }`}
                 >
                   Cancel
@@ -362,7 +332,7 @@ const DocumentManager = ({ isDarkMode, onClose, onDocumentDeleted }) => {
                 <button
                   onClick={() => handleDeleteDocument(showConfirmDelete.id, showConfirmDelete.filename)}
                   disabled={deleteLoading[showConfirmDelete.id]}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-lg"
+                  className="px-4 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-lg transition-colors disabled:cursor-not-allowed"
                 >
                   {deleteLoading[showConfirmDelete.id] ? 'Deleting...' : 'Delete'}
                 </button>

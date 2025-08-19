@@ -265,8 +265,38 @@ class BackendService {
     }
   }
 
+  // Check audio cache for different voices
+  async checkAudioCache(selectedText, relatedSections, audioType = 'overview', duration = 3, insights = null) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/insights/check-audio-cache`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          selected_text: selectedText,
+          related_sections: relatedSections,
+          audio_type: audioType,
+          duration_minutes: duration,
+          voice: 'female', // Default voice for hash generation
+          speed: 1.0,
+          insights: insights  // Include insights in cache check
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error checking audio cache:', error);
+      return { cached_voices: { male: false, female: false } };
+    }
+  }
+
   // Generate audio overview using finale TTS service
-  async generateAudioOverview(selectedText, relatedSections, audioType = 'overview', duration = 3) {
+  async generateAudioOverview(selectedText, relatedSections, audioType = 'overview', duration = 3, voice = 'female', speed = 1.0, insights = null) {
     try {
       const response = await fetch(`${API_BASE_URL}/insights/generate-audio-overview`, {
         method: 'POST',
@@ -277,7 +307,10 @@ class BackendService {
           selected_text: selectedText,
           related_sections: relatedSections,
           audio_type: audioType,
-          duration_minutes: duration
+          duration_minutes: duration,
+          voice: voice,
+          speed: speed,
+          insights: insights
         })
       });
 
@@ -292,6 +325,7 @@ class BackendService {
       throw error;
     }
   }
+
 
   // Check backend health
   async checkHealth() {
