@@ -21,7 +21,7 @@ const PodcastGenerator = ({ selectedText, relatedSections, onClose }) => {
       console.log('🎧 Generating podcast for selected text:', selectedText.substring(0, 100) + '...');
       console.log('🎧 Related sections count:', relatedSections?.length || 0);
 
-      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8083';
+      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
       
       const response = await fetch(`${API_URL}/insights/generate-audio-overview`, {
         method: 'POST',

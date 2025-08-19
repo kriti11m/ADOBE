@@ -368,7 +368,7 @@ const FinalAdobePDFViewer = forwardRef(({
       } else if (selectedDocument.file_path) {
         // Handle legacy backend file paths
         console.log('📄 Loading PDF file by file path:', selectedDocument.file_path);
-        contentDescriptor = { content: { location: { url: `http://localhost:8000/files/${selectedDocument.file_path}` } }, metaData: { fileName: metaFileName } };
+        contentDescriptor = { content: { location: { url: `${process.env.REACT_APP_API_URL || 'http://localhost:8080'}/files/${selectedDocument.file_path}` } }, metaData: { fileName: metaFileName } };
       } else if (selectedDocument.dbDocumentId) {
         // Handle database documents via blob URL
         console.log(`📥 Fetching database document ${selectedDocument.dbDocumentId} as blob...`);

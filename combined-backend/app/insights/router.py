@@ -45,6 +45,9 @@ router = APIRouter(prefix="/insights", tags=["insights"])
 # Global cache for audio files
 audio_cache = {}  # {content_hash: {voice: file_path}}
 
+# Global cache for insights to avoid regenerating same content
+insights_cache = {}  # {content_hash: insights_data}
+
 # Pydantic models for finale features
 class InsightsBulbRequest(BaseModel):
     selected_text: str
@@ -123,17 +126,47 @@ async def generate_insights_bulb(request: InsightsBulbRequest):
                             cursor.execute("""
                                 SELECT content FROM document_snippets 
                                 WHERE document_id = ? 
-                                LIMIT 5
+                                LIMIT 10
                             """, (doc.id,))
                             snippets = cursor.fetchall()
                             
                             if snippets:
                                 snippet_texts = [snippet[0] for snippet in snippets]
-                                doc_info['content'] = ' '.join(snippet_texts)[:2000]
-                                print(f"📄 DEBUG: Found snippets for {doc.original_filename}")
+                                doc_info['content'] = ' '.join(snippet_texts)[:3000]
+                                print(f"📄 DEBUG: Found {len(snippets)} snippets for {doc.original_filename}")
                             else:
-                                # Use content preview or generate sample content
-                                doc_info['content'] = doc.content_preview or f"Content from {doc.original_filename}"
+                                # Try to get content from Part 1A extraction results
+                                try:
+                                    from ..part1a.pdf_structure_extractor import MultilingualPDFExtractor
+                                    extractor = MultilingualPDFExtractor()
+                                    
+                                    # Get the full file path
+                                    doc_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "collections", doc.filename)
+                                    
+                                    if os.path.exists(doc_path):
+                                        # Extract first few pages for content
+                                        result = extractor.extract_structure(doc_path)
+                                        if result and result.get('text_content'):
+                                            # Take first 2000 characters of extracted text
+                                            extracted_text = result['text_content'][:2000]
+                                            doc_info['content'] = extracted_text
+                                            
+                                            # Store snippets for future use
+                                            cursor.execute("""
+                                                INSERT INTO document_snippets (document_id, content, chunk_index, page_number)
+                                                VALUES (?, ?, ?, ?)
+                                            """, (doc.id, extracted_text, 0, 1))
+                                            conn.commit()
+                                            print(f"📄 DEBUG: Extracted and stored content from {doc.original_filename}")
+                                        else:
+                                            doc_info['content'] = doc.content_preview or f"Document content from {doc.original_filename}"
+                                    else:
+                                        doc_info['content'] = doc.content_preview or f"Document content from {doc.original_filename}"
+                                        print(f"⚠️ DEBUG: Document file not found: {doc_path}")
+                                        
+                                except Exception as extraction_error:
+                                    print(f"⚠️ DEBUG: Could not extract content: {extraction_error}")
+                                    doc_info['content'] = doc.content_preview or f"Document content from {doc.original_filename}"
                                 
                     except Exception as snippet_error:
                         print(f"⚠️ DEBUG: No snippets found for document {doc.id}: {snippet_error}")
@@ -412,8 +445,19 @@ def _format_existing_insights(insights: Dict, selected_text: str, related_sectio
     return formatted
 
 def _extract_content_insights(selected_text: str, related_sections: List[Dict]) -> Dict[str, str]:
-    """Extract insights from actual content using LLM service"""
+    """Extract insights from actual content using LLM service with caching"""
     try:
+        # Generate cache key based on content
+        content_for_hash = f"{selected_text}|{str(related_sections)}"
+        content_hash = hashlib.md5(content_for_hash.encode()).hexdigest()[:12]
+        
+        # Check if insights are already cached
+        if content_hash in insights_cache:
+            print(f"💾 DEBUG: Using cached insights for content hash: {content_hash}")
+            return insights_cache[content_hash]
+        
+        print(f"🧠 DEBUG: Generating new insights for content hash: {content_hash}")
+        
         # Prepare content for analysis
         content_summary = f"Selected text: {selected_text}\n\n"
         
@@ -461,12 +505,16 @@ Keep each section 2-3 sentences, conversational tone suitable for audio.
                 'conclusion': "This analysis reveals the interconnected nature of knowledge in your personal research library."
             }
         
+        # Cache the insights for future requests
+        insights_cache[content_hash] = insights_data
+        print(f"💾 DEBUG: Cached insights for content hash: {content_hash}")
+        
         return insights_data
         
     except Exception as e:
         print(f"Error generating content insights: {e}")
         # Fallback to basic insights
-        return {
+        fallback_insights = {
             'introduction': f"We're exploring content from your documents about {selected_text[:100]}...",
             'main_content': f"This concept appears across {len(related_sections)} related sections in your library, indicating its significance.",
             'cross_document_analysis': "Your documents provide multiple perspectives on this topic, creating a rich foundation for understanding.",
@@ -475,6 +523,13 @@ Keep each section 2-3 sentences, conversational tone suitable for audio.
             'key_points': "Key themes emerge from multiple sources, providing depth and context to your research.",
             'conclusion': "Continue exploring these connections to deepen your understanding."
         }
+        
+        # Cache fallback insights too
+        content_for_hash = f"{selected_text}|{str(related_sections)}"
+        content_hash = hashlib.md5(content_for_hash.encode()).hexdigest()[:12]
+        insights_cache[content_hash] = fallback_insights
+        
+        return fallback_insights
 
 async def _generate_audio_file(script: str, audio_type: str, voice: str = "female", speed: float = 1.0) -> str:
     """Generate audio file from script using TTS service with caching"""
@@ -494,8 +549,8 @@ async def _generate_audio_file(script: str, audio_type: str, voice: str = "femal
                 if not audio_cache[content_hash]:
                     del audio_cache[content_hash]
         
-        # Generate new audio file
-        audio_filename = f"audio_{audio_type}_{voice}_{speed}x_{int(time.time())}.mp3"
+        # Generate audio file with hash-based filename for proper caching
+        audio_filename = f"audio_{audio_type}_{voice}_{speed}x_{content_hash[:8]}.mp3"
         temp_dir = os.path.join(os.path.dirname(__file__), "..", "..", "temp_audio")
         os.makedirs(temp_dir, exist_ok=True)
         

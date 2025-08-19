@@ -5,6 +5,7 @@ Integrates with existing insights system and supports multiple LLM providers
 
 import os
 import sys
+import hashlib
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
@@ -16,6 +17,9 @@ try:
 except ImportError:
     print("Warning: chat_with_llm module not found. LLM functionality may be limited.")
     get_llm_response = None
+
+# Global cache for LLM responses to avoid repeated calls
+llm_insights_cache = {}  # {content_hash: response}
 
 class UnifiedLLMService:
     """
@@ -29,7 +33,7 @@ class UnifiedLLMService:
         self.model_name = self._get_model_name()
         
         print(f"🚀 Initializing LLM Service with provider: {self.provider}")
-        self._test_connection()
+        # self._test_connection()  # Temporarily disabled to avoid startup network issues
     
     def _get_model_name(self):
         """Get model name based on provider"""
@@ -93,7 +97,7 @@ class UnifiedLLMService:
     
     def generate_related_content_insights(self, selected_text: str, related_sections: List[Dict[str, Any]]) -> str:
         """
-        Generate insights about the relationship between selected text and related sections
+        Generate insights about the relationship between selected text and related sections with caching
         
         Args:
             selected_text: The text selected by the user
@@ -103,6 +107,15 @@ class UnifiedLLMService:
             String containing insights about the relationships
         """
         try:
+            # Generate cache key based on content
+            cache_content = f"{selected_text}|{str(related_sections)}"
+            cache_key = hashlib.md5(cache_content.encode()).hexdigest()[:16]
+            
+            # Check if insights are already cached
+            if cache_key in llm_insights_cache:
+                print(f"💾 LLM Service: Using cached insights for key: {cache_key}")
+                return llm_insights_cache[cache_key]
+            
             print(f"🧠 LLM Service: Generating insights for text of length {len(selected_text)}")
             print(f"🧠 LLM Service: Found {len(related_sections)} related sections")
             
@@ -172,24 +185,40 @@ class UnifiedLLMService:
                     
                     if response:
                         print(f"✅ LLM Service: Generated {len(response)} characters of cross-document insights")
+                        # Cache the successful response
+                        llm_insights_cache[cache_key] = response
+                        print(f"💾 LLM Service: Cached insights for key: {cache_key}")
                         return response
                     else:
                         print("⚠️ LLM Service: Empty response received")
-                        return "Unable to generate insights at this time."
+                        fallback_response = "Unable to generate insights at this time."
+                        llm_insights_cache[cache_key] = fallback_response
+                        return fallback_response
                         
                 except TimeoutError:
                     print("⏰ LLM Service: Request timed out")
-                    return "Insight generation timed out. Please try again with shorter text."
+                    timeout_response = "Insight generation timed out. Please try again with shorter text."
+                    llm_insights_cache[cache_key] = timeout_response
+                    return timeout_response
                 except Exception as llm_error:
                     print(f"❌ LLM Service: LLM call failed: {llm_error}")
-                    return self._fallback_related_insights(selected_text, related_sections)
+                    fallback_response = self._fallback_related_insights(selected_text, related_sections)
+                    llm_insights_cache[cache_key] = fallback_response
+                    return fallback_response
             else:
                 print("⚠️ LLM Service: No LLM response function available")
-                return self._fallback_related_insights(selected_text, related_sections)
+                fallback_response = self._fallback_related_insights(selected_text, related_sections)
+                llm_insights_cache[cache_key] = fallback_response
+                return fallback_response
                 
         except Exception as e:
             print(f"❌ LLM Service: Error generating related content insights: {e}")
-            return f"Insight analysis completed. Found {len(related_sections)} related sections for the selected text."
+            error_response = f"Insight analysis completed. Found {len(related_sections)} related sections for the selected text."
+            # Even cache error responses to avoid repeated failures
+            cache_content = f"{selected_text}|{str(related_sections)}"
+            cache_key = hashlib.md5(cache_content.encode()).hexdigest()[:16]
+            llm_insights_cache[cache_key] = error_response
+            return error_response
     
     def generate_comprehensive_insights(self, selected_text: str, all_documents: List[Dict[str, Any]], related_sections: List[Dict[str, Any]] = None) -> str:
         """

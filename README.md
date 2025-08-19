@@ -3,51 +3,93 @@
 
 A revolutionary AI-powered PDF analysis platform that transforms how you interact with documents. Built with cutting-edge technology, Doc-a-doodle provides intelligent insights, cross-document analysis, and immersive audio experiences.
 
-## 🌟 Overview
+## � Contest Evaluation Instructions
 
-Doc-a-doodle is a comprehensive web-based application that combines Adobe's PDF Embed API with advanced AI capabilities to create an unprecedented document analysis experience. The platform features intelligent recommendations, cross-document insights, AI-powered analysis, and innovative audio generation - all optimized for productivity and user experience.
+### Quick Start (Contest Evaluators)
 
-## ✨ Key Features
-
-### 🎯 Core Intelligence Features
-- **📄 High-Fidelity PDF Rendering**: 100% accurate display using Adobe PDF Embed API
-- **🧠 Smart Recommendations**: AI-powered section identification with >80% accuracy
-- **⚡ Lightning-Fast Navigation**: Complete document navigation in <2 seconds
-- **📁 Intelligent Document Management**: Bulk upload with AI-powered categorization
-- **� Persona-Driven Analysis**: Tailored recommendations based on user role and task
-- **🔗 Cross-Document Intelligence**: Discover connections across multiple documents
-
-### 🚀 Advanced AI Features
-- **💡 AI Insights Generator**: Comprehensive analysis powered by GPT-4o
-  - Key takeaways and critical insights
-  - "Did you know?" fascinating facts
-  - Contradictions and counterpoints analysis
-  - Real-world examples and applications
-- **🎧 Podcast Mode**: Generate 2-5 minute narrated audio overviews
-  - Multiple voice options (male/female)
-  - Variable playback speeds (0.75x - 2.0x)
-  - Background pre-generation for instant switching
-- **🌙 Adaptive Dark Mode**: Complete theme customization
-- **📱 Responsive Design**: Optimized for all screen sizes
-
-### 🔧 Technical Excellence
-- **🚄 Real-time Processing**: Live document analysis and insights
-- **🔄 Background Intelligence**: Pre-generates content for instant access
-- **💾 Smart Caching**: Minimizes redundant processing
-- **🛡️ Enterprise Security**: Secure file handling and processing
-- **⚡ Performance Optimization**: Lazy loading and efficient rendering
-
-## 🏗️ Architecture
-
+1. **Clone and Run:**
+```bash
+git clone <repository-url>
+cd ADOBE
+docker-compose up --build
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Backend       │    │  AI Services    │
-│   (React)       │    │   (FastAPI)     │    │                 │
-├─────────────────┤    ├─────────────────┤    ├─────────────────┤
-│ • PDF Viewer    │ ───│ • Part 1A API   │ ───│ • PDF Structure │
-│ • Upload System │    │ • Part 1B API   │    │ • Text Analysis │
-│ • Smart Panel   │    │ • Document DB   │    │ • Gemini AI     │
-│ • AI Insights   │    │ • Insights API  │    │ • TTS Engine    │
+
+2. **Access Application:**
+- Frontend Interface: http://localhost:8080
+- API Documentation: http://localhost:8080/docs
+- Health Check: http://localhost:8080/health
+
+### Environment Variables (Required for Evaluation)
+
+```bash
+# Adobe PDF Embed API
+ADOBE_EMBED_API_KEY=<your_adobe_key>
+
+# LLM Provider (Gemini)
+LLM_PROVIDER=gemini
+GEMINI_MODEL=gemini-2.5-flash
+GOOGLE_APPLICATION_CREDENTIALS=/credentials/adbe-gcp.json
+# OR alternatively (both work):
+GOOGLE_API_KEY=<your_gemini_key>
+
+# TTS Provider (Azure OpenAI Service - Contest Requirement)
+TTS_PROVIDER=azure
+AZURE_TTS_KEY=<azure_tts_key>
+AZURE_TTS_ENDPOINT=<endpoint>
+AZURE_TTS_DEPLOYMENT=tts  # Default deployment name for evaluation
+```
+
+### Docker Commands (Contest-Compliant)
+
+**Option 1: Using docker-compose (Recommended for Evaluation):**
+```bash
+docker-compose up --build
+```
+
+**Option 2: Using docker run (with credentials file):**
+```bash
+docker run \
+  -v /path/to/credentials:/credentials \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/credentials/adbe-gcp.json \
+  -e ADOBE_EMBED_API_KEY=<your_adobe_key> \
+  -e AZURE_TTS_KEY=<azure_tts_key> \
+  -e AZURE_TTS_ENDPOINT=<endpoint> \
+  -p 8080:8080 \
+  your_image_identifier
+```
+
+**Option 3: Using docker run (with API key):**
+```bash
+docker run \
+  -e ADOBE_EMBED_API_KEY=<your_adobe_key> \
+  -e LLM_PROVIDER=gemini \
+  -e GEMINI_MODEL=gemini-2.5-flash \
+  -e GOOGLE_API_KEY=<your_gemini_key> \
+  -e TTS_PROVIDER=azure \
+  -e AZURE_TTS_KEY=<azure_tts_key> \
+  -e AZURE_TTS_ENDPOINT=<endpoint> \
+  -p 8080:8080 \
+  your_image_identifier
+```
+
+## 🏆 Contest Features Implemented
+
+### ✅ Core Requirements
+- **✓ Single Port Access**: Frontend and backend integrated at http://localhost:8080
+- **✓ Docker Deployment**: Single container with docker-compose support
+- **✓ Contest-Compliant TTS**: Uses required `generate_audio()` function
+- **✓ Environment Variable Support**: Both API key and credentials file methods
+- **✓ Health Monitoring**: Proper health checks and error handling
+
+### ✅ Bonus Features (+10 Points)
+- **✓ Insights Bulb (+5)**: AI-powered comprehensive insights across documents
+- **✓ Audio Overview/Podcast (+5)**: Narrated summaries with voice options
+
+### ✅ Technical Integration
+- **✓ Adobe PDF Embed API**: High-fidelity PDF rendering and interaction
+- **✓ Gemini AI Integration**: Advanced text analysis and insights
+- **✓ Azure OpenAI TTS**: Contest-compliant audio generation
+- **✓ Cross-Document Intelligence**: Multi-document analysis and connections
 │ • Podcast Mode  │    │ • Audio API     │    │ • Embeddings    │
 │ • Collections   │    │ • Collections   │    │ • Similarity    │
 └─────────────────┘    └─────────────────┘    └─────────────────┘

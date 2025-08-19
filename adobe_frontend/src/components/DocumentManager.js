@@ -19,7 +19,7 @@ const DocumentManager = ({ isDarkMode, onClose, onDocumentDeleted }) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch('http://localhost:8083/collections/documents');
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8080'}/collections/documents`);
       const data = await response.json();
       
       if (data.success) {
@@ -39,7 +39,7 @@ const DocumentManager = ({ isDarkMode, onClose, onDocumentDeleted }) => {
     try {
       setDeleteLoading(prev => ({ ...prev, [documentId]: true }));
       
-      const response = await fetch(`http://localhost:8083/collections/document/${documentId}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8080'}/collections/document/${documentId}`, {
         method: 'DELETE'
       });
       
@@ -69,7 +69,7 @@ const DocumentManager = ({ isDarkMode, onClose, onDocumentDeleted }) => {
     try {
       setClearLoading(true);
       
-      const response = await fetch('http://localhost:8083/collections/clear-history', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8080'}/collections/clear-history`, {
         method: 'DELETE'
       });
       

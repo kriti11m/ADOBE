@@ -53,20 +53,26 @@ class TTSService:
                 logger.error("No TTS engines available")
                 return False
             
-            # Use specified engine, or prefer pyttsx3 for voice selection, fallback to first available
+            # Prefer pyttsx3 for voice control, gtts as fallback
             if engine:
                 engine_to_use = engine if engine in self.available_engines else self.available_engines[0]
             else:
-                # Prefer pyttsx3 when voice selection is needed (male voice requested)
-                if voice == 'male' and 'pyttsx3' in self.available_engines:
+                # Always prefer pyttsx3 when available for proper voice control
+                if 'pyttsx3' in self.available_engines:
                     engine_to_use = 'pyttsx3'
+                elif 'gtts' in self.available_engines:
+                    engine_to_use = 'gtts'
                 else:
-                    engine_to_use = self.available_engines[0]
+                    engine_to_use = self.available_engines[0] if self.available_engines else None
             
             logger.info(f"Using TTS engine: {engine_to_use} with voice: {voice}")
             
+            if not engine_to_use:
+                logger.error("No TTS engine available")
+                return False
+            
             if engine_to_use == 'gtts':
-                return await self._generate_with_gtts(text, output_path, speed)
+                return await self._generate_with_gtts(text, output_path, speed, voice)
             elif engine_to_use == 'pyttsx3':
                 return await self._generate_with_pyttsx3(text, output_path, voice, speed)
             else:
@@ -77,16 +83,20 @@ class TTSService:
             logger.error(f"TTS generation failed: {e}")
             return False
     
-    async def _generate_with_gtts(self, text: str, output_path: str, speed: float = 1.0) -> bool:
-        """Generate audio using Google TTS"""
+    async def _generate_with_gtts(self, text: str, output_path: str, speed: float = 1.0, voice: str = 'female') -> bool:
+        """Generate audio using Google TTS (limited voice options)"""
         try:
             from gtts import gTTS
             
-            # gTTS doesn't support speed control directly, so we note it for frontend handling
+            # Note: gTTS has limited voice control - it uses Google's default voice
+            # For proper male/female voices, pyttsx3 should be preferred
+            logger.warning(f"gTTS has limited voice options - requested {voice} voice may not be distinct")
+            
+            # gTTS basic generation
             tts = gTTS(text=text, lang='en', slow=(speed < 0.8))
             tts.save(output_path)
             
-            logger.info(f"Generated audio with gTTS: {output_path}")
+            logger.info(f"Generated audio with gTTS ({voice} voice requested): {output_path}")
             return True
             
         except Exception as e:

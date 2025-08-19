@@ -45,9 +45,12 @@ app.add_middleware(
 )
 
 # Mount static files for frontend (contest requirement)
+frontend_build_path = None
 if os.path.exists("/app/frontend"):
+    frontend_build_path = "/app/frontend"
     app.mount("/static", StaticFiles(directory="/app/frontend/static"), name="static")
 elif os.path.exists("../adobe_frontend/build"):
+    frontend_build_path = "../adobe_frontend/build"
     app.mount("/static", StaticFiles(directory="../adobe_frontend/build/static"), name="static")
 
 # Include routers for finale features
@@ -57,6 +60,30 @@ app.include_router(documents_router)
 app.include_router(insights_router)
 app.include_router(text_selection_router)
 app.include_router(collections_router)
+
+# Catch-all route to serve React app for any non-API routes (SPA support)
+@app.get("/{full_path:path}")
+async def serve_react_app(full_path: str):
+    """Serve React app for all non-API routes (Single Page Application support)"""
+    # Skip API routes - let FastAPI handle them normally
+    if full_path.startswith(("api/", "docs", "redoc", "health", "static/")):
+        raise HTTPException(status_code=404, detail="Not found")
+    
+    # Serve index.html for all other routes (React Router will handle client-side routing)
+    if frontend_build_path and os.path.exists(f"{frontend_build_path}/index.html"):
+        return FileResponse(f"{frontend_build_path}/index.html")
+    else:
+        # Fallback if frontend not available
+        return HTMLResponse(content="""
+        <html>
+            <head><title>Frontend Not Available</title></head>
+            <body>
+                <h1>Frontend Build Not Found</h1>
+                <p>Please build the frontend first: <code>cd adobe_frontend && npm run build</code></p>
+                <p>API Documentation: <a href="/docs">/docs</a></p>
+            </body>
+        </html>
+        """, status_code=404)
 
 # Contest required health check endpoint
 @app.get("/health")

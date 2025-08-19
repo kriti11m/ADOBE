@@ -401,8 +401,21 @@ function App() {
     try {
       console.log('🎯 Text selection event received:', selectionData);
       
-      setSelectedTextData(selectionData);
-      setRelatedSections(selectionData.relatedSections || []);
+      // Only update selectedTextData if we have actual text selected
+      // This prevents navigation from clearing the selection for insights
+      if (selectionData && selectionData.selectedText && selectionData.selectedText.trim()) {
+        console.log('✅ Valid text selection - updating selectedTextData');
+        console.log('📝 Selected text preview:', selectionData.selectedText.substring(0, 100) + (selectionData.selectedText.length > 100 ? '...' : ''));
+        setSelectedTextData(selectionData);
+        setRelatedSections(selectionData.relatedSections || []);
+      } else {
+        console.log('❌ Empty text selection - preserving existing selectedTextData for insights');
+        // Don't clear selectedTextData - keep it for insights generation
+        // Only update related sections if provided
+        if (selectionData && selectionData.relatedSections) {
+          setRelatedSections(selectionData.relatedSections);
+        }
+      }
       
       // Handle specific actions
       if (selectionData?.action === 'ai-assistant') {
@@ -422,6 +435,13 @@ function App() {
     } catch (error) {
       console.error('❌ Error handling text selection:', error);
     }
+  };
+
+  // Clear text selection handler
+  const handleClearTextSelection = () => {
+    console.log('🗑️ Explicitly clearing text selection');
+    setSelectedTextData(null);
+    setRelatedSections([]);
   };
 
   // AI Assistant handlers

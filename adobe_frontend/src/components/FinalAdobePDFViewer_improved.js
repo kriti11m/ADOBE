@@ -308,7 +308,7 @@ const FinalAdobePDFViewer = forwardRef(({
       
       // Preview the PDF file
       await adobeDCView.previewFile({
-        content: { location: { url: `http://localhost:8000/files/${selectedDocument.file_path}` } },
+        content: { location: { url: `${process.env.REACT_APP_API_URL || 'http://localhost:8080'}/files/${selectedDocument.file_path}` } },
         metaData: { fileName: selectedDocument.name || 'document.pdf' }
       }, {
         ...ADOBE_CONFIG.VIEWER_CONFIG,

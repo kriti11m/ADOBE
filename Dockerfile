@@ -13,8 +13,8 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Ollama for local LLM support (contest requirement)
-RUN curl -fsSL https://ollama.ai/install.sh | sh
+# Optional: Install Ollama for local LLM support (may not be needed for contest)
+# RUN curl -fsSL https://ollama.ai/install.sh | sh
 
 # Copy requirements first for better caching
 COPY combined-backend/requirements.txt .
@@ -22,26 +22,19 @@ COPY combined-backend/requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend code
-COPY combined-backend/ ./backend/
+# Copy backend code to the correct location
+COPY combined-backend/ ./
 
-# Copy frontend build
+# Copy frontend build to where main.py expects it
 COPY adobe_frontend/build/ ./frontend/
 
 # Create necessary directories
-RUN mkdir -p /app/backend/data/collections \
-    && mkdir -p /app/backend/temp_audio \
+RUN mkdir -p /app/data/collections \
+    && mkdir -p /app/temp_audio \
     && mkdir -p /credentials
 
-# Install and pull default Ollama models for contest
-RUN ollama serve & \
-    sleep 10 && \
-    ollama pull nomic-embed-text && \
-    ollama pull llama3 && \
-    pkill ollama
-
 # Set environment variables for contest
-ENV PYTHONPATH="/app/backend"
+ENV PYTHONPATH="/app"
 ENV PYTHONUNBUFFERED=1
 ENV HOST=0.0.0.0
 ENV PORT=8080
@@ -61,21 +54,20 @@ EXPOSE 8080
 COPY <<EOF /app/start.sh
 #!/bin/bash
 
-# Start Ollama service in background
-ollama serve &
-OLLAMA_PID=\$!
-
-# Wait for Ollama to be ready
-echo "🚀 Starting Ollama service..."
-sleep 5
-
-# Ensure models are available
-echo "📋 Checking Ollama models..."
-ollama list || echo "⚠️ No models found, will pull on first use"
+# Optional: Start Ollama service in background if available
+if command -v ollama &> /dev/null; then
+    echo "🚀 Starting Ollama service..."
+    ollama serve &
+    OLLAMA_PID=\$!
+    sleep 5
+    ollama list || echo "⚠️ No models found, will pull on first use"
+else
+    echo "ℹ️ Ollama not installed, using external LLM providers"
+fi
 
 # Start the main application
 echo "🚀 Starting Adobe Contest Application..."
-cd /app/backend
+cd /app
 
 # Initialize database if needed
 python init_db.py || echo "⚠️ Database initialization skipped"
