@@ -18,10 +18,19 @@ const FinalAdobePDFViewer = forwardRef(({
   const [viewerReady, setViewerReady] = useState(false);
   const [currentSelectedText, setCurrentSelectedText] = useState(''); // Store selected text
   const [isRealSelection, setIsRealSelection] = useState(false); // Track if selection is from PDF or test
+  const [currentPage, setCurrentPage] = useState(1); // Track current page
   
   // Refs
   const viewerRef = useRef(null);
   const viewerInstanceRef = useRef(null);
+
+  // Helper function to update current page from Adobe events
+  const setCurrentPageFromAdobe = (pageNumber) => {
+    if (pageNumber && !isNaN(pageNumber)) {
+      setCurrentPage(parseInt(pageNumber));
+      console.log('📄 Current page updated from Adobe:', pageNumber);
+    }
+  };
 
   // Expose navigation methods to parent components
   useImperativeHandle(ref, () => ({
@@ -53,12 +62,45 @@ const FinalAdobePDFViewer = forwardRef(({
 
     try {
       console.log(`🎯 Navigating to page ${targetPage} for section: "${sectionTitle}"`);
-      await adobeAPIs.gotoLocation({ pageNumber: targetPage });
-      console.log(`✅ Successfully navigated to page ${targetPage}`);
+      
+      // Use the CORRECT Adobe API signature: gotoLocation(pageNumber, x, y)
+      // According to Adobe docs, parameters are separate, not an object
+      await adobeAPIs.gotoLocation(targetPage, 0, 0);
+      console.log(`✅ Successfully navigated to page ${targetPage} using correct gotoLocation signature`);
 
       if (onSectionHighlight) onSectionHighlight(targetPage);
     } catch (error) {
-      console.error('❌ Navigation failed:', error);
+      console.error('❌ Navigation failed with correct signature:', error);
+      console.log('🔍 Falling back to alternative methods...');
+      
+      // Fallback methods if the main one fails
+      let navigationSuccess = false;
+      
+      // Try alternative object-based approach (some versions might support this)
+      try {
+        await adobeAPIs.gotoLocation({ pageNumber: targetPage });
+        console.log(`✅ Successfully navigated using object parameter format`);
+        navigationSuccess = true;
+      } catch (fallbackError) {
+        console.warn('⚠️ Object-based gotoLocation also failed:', fallbackError);
+      }
+      
+      // Try search as ultimate fallback if we have section title
+      if (!navigationSuccess && sectionTitle && adobeAPIs.search) {
+        try {
+          console.log('🔍 Attempting search navigation as fallback...');
+          const searchResult = await adobeAPIs.search(sectionTitle);
+          console.log('🔍 Search result:', searchResult);
+          navigationSuccess = true;
+        } catch (searchError) {
+          console.warn('⚠️ Search fallback failed:', searchError);
+        }
+      }
+      
+      if (!navigationSuccess) {
+        console.error('❌ All navigation methods failed');
+        console.log('📋 Available API methods:', Object.keys(adobeAPIs));
+      }
     }
   };
 
@@ -363,6 +405,74 @@ const FinalAdobePDFViewer = forwardRef(({
       
       console.log('✅ Adobe PDF viewer fully loaded and ready');
       console.log('🎯 Available navigation methods:', Object.keys(apis));
+      
+      // Log method signatures for debugging
+      Object.keys(apis).forEach(key => {
+        const method = apis[key];
+        if (typeof method === 'function') {
+          console.log(`  🔧 ${key}: function`);
+        } else {
+          console.log(`  📊 ${key}: ${typeof method}`);
+        }
+      });
+
+      // Register Adobe event listeners according to official documentation
+      try {
+        console.log('📋 Registering Adobe PDF event listeners...');
+        
+        // Register event listener for text selection and other events
+        const eventOptions = {
+          // Listen for specific events including text selection
+          listenOn: [
+            window.AdobeDC?.View?.Enum?.Events?.SELECTION_END || 'SELECTION_END',
+            window.AdobeDC?.View?.Enum?.Events?.PAGE_VIEW || 'PAGE_VIEW',
+            window.AdobeDC?.View?.Enum?.Events?.TEXT_SELECTION_END || 'TEXT_SELECTION_END'
+          ],
+          enableFilePreviewEvents: true,
+          enablePDFAnalytics: false // Disable analytics for better performance
+        };
+
+        // Register the official Adobe event listener
+        if (viewerInstance.registerCallback) {
+          viewerInstance.registerCallback(
+            window.AdobeDC?.View?.Enum?.CallbackType?.EVENT_LISTENER || 'EVENT_LISTENER',
+            async function(event) {
+              console.log('🎯 Adobe event received:', event.type, event.data);
+              
+              // Handle text selection events
+              if (event.type === 'SELECTION_END' || event.type === 'TEXT_SELECTION_END') {
+                try {
+                  // Use getSelectedContent API when selection ends
+                  const selectedContent = await apis.getSelectedContent();
+                  console.log('🔍 Selected content from Adobe API:', selectedContent);
+                  
+                  if (selectedContent && selectedContent.data) {
+                    const selectedText = selectedContent.data.trim();
+                    if (selectedText.length > 5) {
+                      console.log('✅ Adobe text selection detected:', selectedText);
+                      showTextSelectionActions(selectedText, true);
+                    }
+                  }
+                } catch (error) {
+                  console.warn('⚠️ Error getting selected content:', error);
+                }
+              }
+              
+              // Handle page view events for context
+              if (event.type === 'PAGE_VIEW' && event.data) {
+                console.log('📄 Page view event:', event.data);
+                setCurrentPageFromAdobe(event.data.pageNumber || event.data.page);
+              }
+            },
+            eventOptions
+          );
+          
+          console.log('✅ Adobe event listeners registered successfully');
+        }
+        
+      } catch (callbackError) {
+        console.log('⚠️ Adobe event listeners not available in this SDK version:', callbackError);
+      }
 
       // Register feature flag callbacks to prevent console errors
       try {

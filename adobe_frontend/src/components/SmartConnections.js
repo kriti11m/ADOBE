@@ -77,26 +77,31 @@ const SmartConnections = ({
   // Handle jumping to a specific section in a document
   const handleJumpToSection = async (section) => {
     try {
-      console.log('🎯 Jumping to section:', section);
+      console.log('🎯 SmartConnections: Jump to section clicked');
+      console.log('📄 Section data:', section);
+      console.log('📋 Current document:', currentDocument?.id, currentDocument?.dbDocumentId, currentDocument?.original_filename);
       
       if (!section.documentId || section.pageNumber === 'N/A') {
-        console.warn('Cannot navigate: missing document ID or page number');
+        console.warn('❌ Cannot navigate: missing document ID or page number');
+        console.log('Missing data - documentId:', section.documentId, 'pageNumber:', section.pageNumber);
         return;
       }
 
       // Handle decimal page numbers (e.g., "2.3" -> page 2)
       const pageNum = parseInt(parseFloat(section.pageNumber));
       if (isNaN(pageNum) || pageNum < 1) {
-        console.warn('Invalid page number:', section.pageNumber);
+        console.warn('❌ Invalid page number:', section.pageNumber);
         return;
       }
 
-      console.log(`📍 Navigating to page ${pageNum} from page number "${section.pageNumber}"`);
+      console.log(`📍 Navigation target: Page ${pageNum} (from "${section.pageNumber}") in document ${section.documentId}`);
 
       // Check if this section is from the currently loaded document
       const isCurrentDocument = currentDocument && 
         (currentDocument.dbDocumentId === section.documentId || 
          currentDocument.id === section.documentId);
+
+      console.log('🔍 Is current document?', isCurrentDocument);
 
       if (isCurrentDocument) {
         // Navigate within current document - only pass page number
@@ -104,15 +109,21 @@ const SmartConnections = ({
           console.log(`🎯 Navigating to page ${pageNum} in current document`);
           await onNavigateToSection(pageNum);
         } else {
-          console.warn('Navigation function not available');
+          console.warn('❌ Navigation function not available');
         }
       } else {
         // Load different document and then navigate
         if (onLoadDocumentAndNavigate) {
           console.log(`🎯 Loading document ${section.documentId} and navigating to page ${pageNum}`);
-          await onLoadDocumentAndNavigate(section.documentId, pageNum, section.sectionTitle || section.title);
+          console.log(`📄 Section title: "${section.sectionTitle || section.title}"`);
+          const success = await onLoadDocumentAndNavigate(section.documentId, pageNum, section.sectionTitle || section.title);
+          if (success) {
+            console.log('✅ Cross-document navigation completed successfully');
+          } else {
+            console.error('❌ Cross-document navigation failed');
+          }
         } else {
-          console.warn('Cross-document navigation function not available');
+          console.warn('❌ Cross-document navigation function not available');
         }
       }
     } catch (error) {

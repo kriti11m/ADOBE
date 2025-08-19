@@ -12,6 +12,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from sentence_transformers import SentenceTransformer
 import sqlite3
 from datetime import datetime
+import pdfplumber
 
 class TextSelectionService:
     def __init__(self):
@@ -287,8 +288,8 @@ class TextSelectionService:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             
-            # Get all documents except the current one
-            query = "SELECT id, original_filename, title FROM pdf_documents WHERE is_active = 1"
+            # Get all documents except the current one with their file paths
+            query = "SELECT id, original_filename, title, file_path FROM pdf_documents WHERE is_active = 1"
             params = []
             
             if document_id:
@@ -298,30 +299,54 @@ class TextSelectionService:
             cursor.execute(query, params)
             documents = cursor.fetchall()
             
-            # For demo purposes, create synthetic related content
-            # In production, this would search through actual document content
-            for doc_id, filename, title in documents:
-                # Generate synthetic snippets that would be semantically similar
-                synthetic_snippets = self.generate_synthetic_related_snippets(
-                    selected_text, filename, title
-                )
-                
-                for snippet in synthetic_snippets:
-                    # Calculate similarity score
-                    similarity = self.calculate_similarity(selected_text, snippet["text"])
+            # Extract content from actual PDF files
+            for doc_id, filename, title, file_path in documents:
+                try:
+                    if not file_path or not os.path.exists(file_path):
+                        print(f"File not found: {file_path}")
+                        continue
                     
-                    if similarity >= min_similarity:
-                        related_sections.append({
-                            "document_id": doc_id,
-                            "document_title": title or filename,
-                            "document_filename": filename,
-                            "snippet_text": snippet["text"],
-                            "similarity_score": similarity,
-                            "section_title": snippet.get("section_title", "Related Content"),
-                            "page_number": snippet.get("page", 1),
-                            "context": snippet.get("context", ""),
-                            "snippet_id": f"snippet_{doc_id}_{len(related_sections)}"
-                        })
+                    # Extract real content from PDF
+                    real_sections = self.extract_real_sections_from_pdf(file_path, selected_text)
+                    
+                    for section in real_sections:
+                        # Calculate similarity score
+                        similarity = self.calculate_similarity(selected_text, section["text"])
+                        
+                        if similarity >= min_similarity:
+                            related_sections.append({
+                                "document_id": doc_id,
+                                "document_title": title or filename,
+                                "document_filename": filename,
+                                "snippet_text": section["text"],
+                                "similarity_score": similarity,
+                                "section_title": section.get("section_title", "Related Content"),
+                                "page_number": section.get("page_number", 1),  # Real page number from PDF
+                                "context": section.get("context", ""),
+                                "snippet_id": f"snippet_{doc_id}_{section.get('page_number', 1)}"
+                            })
+                            
+                except Exception as e:
+                    print(f"Error processing document {filename}: {e}")
+                    # Fallback to synthetic data for this document
+                    synthetic_snippets = self.generate_synthetic_related_snippets(
+                        selected_text, filename, title
+                    )
+                    
+                    for snippet in synthetic_snippets:
+                        similarity = self.calculate_similarity(selected_text, snippet["text"])
+                        if similarity >= min_similarity:
+                            related_sections.append({
+                                "document_id": doc_id,
+                                "document_title": title or filename,
+                                "document_filename": filename,
+                                "snippet_text": snippet["text"],
+                                "similarity_score": similarity,
+                                "section_title": snippet.get("section_title", "Related Content"),
+                                "page_number": snippet.get("page", 1),
+                                "context": snippet.get("context", ""),
+                                "snippet_id": f"snippet_{doc_id}_{len(related_sections)}"
+                            })
             
             conn.close()
             
@@ -333,6 +358,69 @@ class TextSelectionService:
             print(f"Error finding related sections: {e}")
             return []
     
+    def extract_real_sections_from_pdf(self, pdf_path: str, selected_text: str) -> List[Dict[str, Any]]:
+        """
+        Extract real sections from PDF file with actual page numbers
+        """
+        sections = []
+        
+        try:
+            # Keywords from selected text for better matching
+            selected_keywords = set(word.lower().strip('.,!?;:()[]{}') 
+                                  for word in selected_text.lower().split() 
+                                  if len(word) > 3)
+            
+            # Open the PDF with pdfplumber
+            with pdfplumber.open(pdf_path) as pdf:
+                # Process each page
+                for page_num, page in enumerate(pdf.pages):
+                    page_text = page.extract_text()
+                    
+                    if not page_text or not page_text.strip():
+                        continue
+                    
+                    # Split into paragraphs
+                    paragraphs = [p.strip() for p in page_text.split('\n\n') if p.strip()]
+                    
+                    for paragraph in paragraphs:
+                        # Skip very short paragraphs
+                        if len(paragraph) < 100:
+                            continue
+                        
+                        # Check if this paragraph contains keywords from selected text
+                        paragraph_words = set(word.lower().strip('.,!?;:()[]{}') 
+                                            for word in paragraph.lower().split() 
+                                            if len(word) > 3)
+                        
+                        # Calculate keyword overlap
+                        common_keywords = selected_keywords.intersection(paragraph_words)
+                        if len(common_keywords) > 0:  # At least one keyword match
+                            
+                            # Try to find a section title (look at the beginning of the paragraph)
+                            lines = paragraph.split('\n')
+                            potential_title = lines[0].strip() if lines else "Related Content"
+                            
+                            # Clean up title if it's too long
+                            if len(potential_title) > 100:
+                                potential_title = "Related Content"
+                            
+                            sections.append({
+                                "text": paragraph[:500] + ("..." if len(paragraph) > 500 else ""),  # Truncate for snippet
+                                "section_title": potential_title,
+                                "page_number": page_num + 1,  # Convert to 1-based page numbering
+                                "context": f"Page {page_num + 1}"
+                            })
+                    
+                    # Limit sections per document to avoid too many results
+                    if len(sections) >= 3:
+                        break
+            
+            return sections
+            
+        except Exception as e:
+            print(f"Error extracting sections from PDF {pdf_path}: {e}")
+            return []
+
     def generate_synthetic_related_snippets(self, selected_text: str, filename: str, title: str) -> List[Dict[str, Any]]:
         """
         Generate synthetic related snippets for demo purposes
