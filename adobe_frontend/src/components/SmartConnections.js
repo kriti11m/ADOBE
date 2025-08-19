@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RefreshCw, Lightbulb, Brain, ChevronLeft, BookOpen, FileText } from 'lucide-react';
+import { RefreshCw, Lightbulb, BookOpen, FileText, Search } from 'lucide-react';
 import { useDarkMode } from '../App';
 import backendService from '../services/backendService';
 import FinaleIntegrationService from '../services/finaleIntegrationService';
@@ -48,7 +48,6 @@ const SmartConnections = ({
   selectedTextData,
   onInsightsGenerated
 }) => {
-  const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [sidebarView, setSidebarView] = useState('sections'); // 'sections' or 'insights'
   const [generatedInsights, setGeneratedInsights] = useState(null);
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
@@ -420,358 +419,338 @@ const SmartConnections = ({
 
   return (
     <div
-      className={`${sidebarExpanded ? "w-80" : "w-16"} border-l ${sidebarClasses} transition-all duration-300 ease-in-out flex flex-col h-full`}
+      id="smart-connections-panel"
+      className={`w-80 border-l ${sidebarClasses} transition-all duration-300 ease-in-out flex flex-col h-full`}
     >
-      {!sidebarExpanded ? (
-        // Collapsed state - only show Smart Connections icon
-        <div className="flex-1 flex items-center justify-center">
-          <Button
-            onClick={() => setSidebarExpanded(true)}
-            className={`w-12 h-12 rounded-xl ${isDarkMode ? "bg-slate-700 hover:bg-slate-600 text-slate-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"} transition-all duration-300 hover:scale-110 shadow-lg`}
-            variant="ghost"
-          >
-            <Brain className="w-6 h-6" />
-          </Button>
-        </div>
-      ) : (
-        // Expanded state - show full content
-        <div className="p-4 flex flex-col h-full">
-          {/* Header with close button */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Brain className="w-5 h-5 text-blue-500" />
-              <h3 className={`font-semibold ${isDarkMode ? "text-white" : "text-gray-900"}`}>Smart Connections</h3>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={() => setSidebarView(sidebarView === "sections" ? "insights" : "sections")}
-                className={`p-2 rounded-lg ${isDarkMode ? "bg-slate-700 hover:bg-slate-600 text-slate-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"} transition-all duration-300`}
-                variant="ghost"
-                size="sm"
-              >
-                {sidebarView === "sections" ? <Lightbulb className="w-4 h-4" /> : <BookOpen className="w-4 h-4" />}
-              </Button>
-              <Button
-                onClick={() => setSidebarExpanded(false)}
-                className={`p-2 rounded-lg ${isDarkMode ? "bg-slate-700 hover:bg-slate-600 text-slate-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"} transition-all duration-300`}
-                variant="ghost"
-                size="sm"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-            </div>
+      {/* Always show expanded content */}
+      <div className="p-4 flex flex-col h-full">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <h3 className={`font-semibold ${isDarkMode ? "text-white" : "text-gray-900"}`}>Smart Connections</h3>
           </div>
+          <div className="flex items-center gap-2">
+            <Button
+              id="insights-lightbulb-toggle"
+              onClick={() => setSidebarView(sidebarView === "sections" ? "insights" : "sections")}
+              className={`p-2 rounded-lg ${isDarkMode ? "bg-slate-700 hover:bg-slate-600 text-slate-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"} transition-all duration-300`}
+              variant="ghost"
+              size="sm"
+            >
+              {sidebarView === "sections" ? <Lightbulb className="w-4 h-4" /> : <BookOpen className="w-4 h-4" />}
+            </Button>
+          </div>
+        </div>
 
-          {/* Content based on selected view */}
-          <div className="flex-1 overflow-y-auto">
-            {sidebarView === "sections" ? (
-              // Related Sections View
-              <div className="space-y-3">
-                {/* Selected Text Display & Action Button */}
-                {selectedTextData && selectedTextData.selectedText ? (
-                  <div className="space-y-3">
-                    <div className={`p-3 rounded-xl ${isDarkMode ? "bg-slate-700/50 border-slate-600" : "bg-white/80 border-gray-200"} border`}>
-                      <div className={`text-xs font-medium mb-2 ${isDarkMode ? "text-slate-400" : "text-gray-500"}`}>
-                        Selected Text:
-                      </div>
-                      <div className={`text-sm leading-relaxed ${isDarkMode ? "text-slate-300" : "text-gray-700"}`}>
-                        "{selectedTextData.selectedText.length > 120 
-                          ? selectedTextData.selectedText.substring(0, 120) + '...' 
-                          : selectedTextData.selectedText}"
-                      </div>
+        {/* Content based on selected view */}
+        <div className="flex-1 overflow-y-auto">
+          {sidebarView === "sections" ? (
+            // Related Sections View
+            <div className="space-y-3">
+              {/* Selected Text Display & Action Button */}
+              {selectedTextData && selectedTextData.selectedText ? (
+                <div className="space-y-3">
+                  <div className={`p-3 rounded-xl ${isDarkMode ? "bg-slate-700/50 border-slate-600" : "bg-white/80 border-gray-200"} border`}>
+                    <div className={`text-xs font-medium mb-2 ${isDarkMode ? "text-slate-400" : "text-gray-500"}`}>
+                      Selected Text:
                     </div>
-                    
-                    {/* Generate Sections Button */}
-                    <Button
-                      onClick={handleSmartConnectionsClick}
-                      disabled={isLoadingRelatedSections || isGeneratingInsights}
-                      className={`w-full py-2 px-4 rounded-xl text-sm font-medium flex items-center justify-center gap-2 ${
-                        isLoadingRelatedSections || isGeneratingInsights
-                          ? isDarkMode
-                            ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
-                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                          : isDarkMode
-                            ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl'
-                            : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl'
-                      }`}
-                    >
-                      {isLoadingRelatedSections ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>Finding Sections...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Brain className="w-4 h-4" />
-                          <span>Find Related Sections</span>
-                        </>
-                      )}
-                    </Button>
+                    <div className={`text-sm leading-relaxed ${isDarkMode ? "text-slate-300" : "text-gray-700"}`}>
+                      "{selectedTextData.selectedText.length > 120 
+                        ? selectedTextData.selectedText.substring(0, 120) + '...' 
+                        : selectedTextData.selectedText}"
+                    </div>
                   </div>
-                ) : (
-                  <div className={`text-center py-6 ${isDarkMode ? "text-slate-400" : "text-gray-600"}`}>
-                    <FileText className={`w-10 h-10 mx-auto mb-3 ${isDarkMode ? "text-slate-500" : "text-gray-400"}`} />
-                    <h3 className="font-medium mb-2 text-sm">Select Text to Begin</h3>
-                    <p className="text-xs">
-                      Highlight any text in the PDF to discover related sections
-                    </p>
-                  </div>
-                )}
+                  
+                  {/* Generate Sections Button */}
+                  <Button
+                    onClick={handleSmartConnectionsClick}
+                    disabled={isLoadingRelatedSections || isGeneratingInsights}
+                    className={`w-full py-2 px-4 rounded-xl text-sm font-medium flex items-center justify-center gap-2 ${
+                      isLoadingRelatedSections || isGeneratingInsights
+                        ? isDarkMode
+                          ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                          : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : isDarkMode
+                          ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl'
+                    }`}
+                  >
+                    {isLoadingRelatedSections ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Finding Sections...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Search className="w-4 h-4" />
+                        <span>Find Related Sections</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <div className={`text-center py-6 ${isDarkMode ? "text-slate-400" : "text-gray-600"}`}>
+                  <FileText className={`w-10 h-10 mx-auto mb-3 ${isDarkMode ? "text-slate-500" : "text-gray-400"}`} />
+                  <h3 className="font-medium mb-2 text-sm">Select Text to Begin</h3>
+                  <p className="text-xs">
+                    Highlight any text in the PDF to discover related sections
+                  </p>
+                </div>
+              )}
 
-                {/* Related Sections Results */}
-                {relatedSections && relatedSections.length > 0 ? (
-                  <div className="space-y-3">
-                    <h4 className={`text-sm font-medium ${isDarkMode ? "text-slate-300" : "text-gray-700"} mb-3`}>
-                      Related Sections ({relatedSections.length})
-                    </h4>
-                    
-                    {relatedSections.slice(0, 5).map((section, index) => (
-                      <div
-                        key={index}
-                        className={`p-3 rounded-xl ${isDarkMode ? "bg-slate-700/50 hover:bg-slate-700 border-slate-600" : "bg-white/80 hover:bg-white border-gray-200"} border transition-all duration-300 hover:shadow-lg group`}
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (section.pageNumber !== 'N/A' && section.documentId) {
-                                    handleJumpToSection(section);
-                                  }
-                                }}
-                                className={`text-xs px-2 py-1 rounded-full font-medium transition-colors ${
-                                  section.pageNumber !== 'N/A' && section.documentId
-                                    ? (isDarkMode 
-                                        ? "bg-green-900/50 text-green-300 hover:bg-green-800/70" 
-                                        : "bg-green-100 text-green-700 hover:bg-green-200")
-                                    : (isDarkMode 
-                                        ? "bg-gray-700 text-gray-400 cursor-not-allowed" 
-                                        : "bg-gray-200 text-gray-500 cursor-not-allowed")
-                                }`}
-                                title={section.pageNumber !== 'N/A' && section.documentId
-                                  ? `Jump to page ${section.pageNumber} in ${section.documentFilename || 'document'}`
-                                  : 'Navigation unavailable for this section'}
-                                disabled={section.pageNumber === 'N/A' || !section.documentId}
-                              >
-                                🎯 Jump to Section
-                              </button>
-                          </div>
-                          {section.relevance && (
-                            <div className={`text-xs px-2 py-1 rounded ${
-                              section.relevance > 80 ? 'bg-green-500/20 text-green-600' :
-                              section.relevance > 60 ? 'bg-blue-500/20 text-blue-600' :
-                              'bg-yellow-500/20 text-yellow-600'
-                            }`}>
-                              {section.relevance}% match
-                            </div>
-                          )}
+              {/* Related Sections Results */}
+              {relatedSections && relatedSections.length > 0 ? (
+                <div className="space-y-3">
+                  <h4 className={`text-sm font-medium ${isDarkMode ? "text-slate-300" : "text-gray-700"} mb-3`}>
+                    Related Sections ({relatedSections.length})
+                  </h4>
+                  
+                  {relatedSections.slice(0, 5).map((section, index) => (
+                    <div
+                      key={index}
+                      className={`p-3 rounded-xl ${isDarkMode ? "bg-slate-700/50 hover:bg-slate-700 border-slate-600" : "bg-white/80 hover:bg-white border-gray-200"} border transition-all duration-300 hover:shadow-lg group`}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (section.pageNumber !== 'N/A' && section.documentId) {
+                                  handleJumpToSection(section);
+                                }
+                              }}
+                              className={`text-xs px-2 py-1 rounded-full font-medium transition-colors ${
+                                section.pageNumber !== 'N/A' && section.documentId
+                                  ? (isDarkMode 
+                                      ? "bg-green-900/50 text-green-300 hover:bg-green-800/70" 
+                                      : "bg-green-100 text-green-700 hover:bg-green-200")
+                                  : (isDarkMode 
+                                      ? "bg-gray-700 text-gray-400 cursor-not-allowed" 
+                                      : "bg-gray-200 text-gray-500 cursor-not-allowed")
+                              }`}
+                              title={section.pageNumber !== 'N/A' && section.documentId
+                                ? `Jump to page ${section.pageNumber} in ${section.documentFilename || 'document'}`
+                                : 'Navigation unavailable for this section'}
+                              disabled={section.pageNumber === 'N/A' || !section.documentId}
+                            >
+                              🎯 Jump to Section
+                            </button>
                         </div>
-                        <h5
-                          className={`font-medium ${isDarkMode ? "text-white" : "text-gray-900"} mb-2 text-sm group-hover:text-blue-600 transition-colors`}
-                        >
-                          {section.title}
-                        </h5>
-                        <p className={`text-xs ${isDarkMode ? "text-slate-400" : "text-gray-600"} leading-relaxed mb-2`}>
-                          {section.snippet}
-                        </p>
-                        {section.documentFilename && (
-                          <div className={`text-xs ${isDarkMode ? "text-slate-500" : "text-gray-500"} italic`}>
-                            From: {section.documentFilename}
+                        {section.relevance && (
+                          <div className={`text-xs px-2 py-1 rounded ${
+                            section.relevance > 80 ? 'bg-green-500/20 text-green-600' :
+                            section.relevance > 60 ? 'bg-blue-500/20 text-blue-600' :
+                            'bg-yellow-500/20 text-yellow-600'
+                          }`}>
+                            {section.relevance}% match
                           </div>
                         )}
                       </div>
-                    ))}
-                  </div>
-                ) : selectedTextData && selectedTextData.selectedText && !isLoadingRelatedSections ? (
-                  <div className={`text-center py-4 ${isDarkMode ? "text-slate-400" : "text-gray-600"}`}>
-                    <p className="text-sm">Click "Find Related Sections" to discover connections</p>
-                  </div>
-                ) : null}
+                      <h5
+                        className={`font-medium ${isDarkMode ? "text-white" : "text-gray-900"} mb-2 text-sm group-hover:text-blue-600 transition-colors`}
+                      >
+                        {section.title}
+                      </h5>
+                      <p className={`text-xs ${isDarkMode ? "text-slate-400" : "text-gray-600"} leading-relaxed mb-2`}>
+                        {section.snippet}
+                      </p>
+                      {section.documentFilename && (
+                        <div className={`text-xs ${isDarkMode ? "text-slate-500" : "text-gray-500"} italic`}>
+                          From: {section.documentFilename}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : selectedTextData && selectedTextData.selectedText && !isLoadingRelatedSections ? (
+                <div className={`text-center py-4 ${isDarkMode ? "text-slate-400" : "text-gray-600"}`}>
+                  <p className="text-sm">Click "Find Related Sections" to discover connections</p>
+                </div>
+              ) : null}
 
-                {/* Error Display */}
-                {insightsError && (
-                  <div className={`p-3 rounded-xl text-sm ${
-                    isDarkMode 
-                      ? 'bg-red-500/10 border border-red-500/20 text-red-300' 
-                      : 'bg-red-50 border border-red-200 text-red-700'
-                  }`}>
-                    {insightsError}
-                  </div>
-                )}
-              </div>
-            ) : (
-              // AI Insights View
-              <div className="space-y-4">
-                <h4
-                  className={`text-sm font-medium ${isDarkMode ? "text-slate-300" : "text-gray-700"} mb-3 flex items-center gap-2`}
-                >
-                  <Lightbulb className="w-4 h-4 text-yellow-500" />
-                  AI Insights
-                </h4>
+              {/* Error Display */}
+              {insightsError && (
+                <div className={`p-3 rounded-xl text-sm ${
+                  isDarkMode 
+                    ? 'bg-red-500/10 border border-red-500/20 text-red-300' 
+                    : 'bg-red-50 border border-red-200 text-red-700'
+                }`}>
+                  {insightsError}
+                </div>
+              )}
+            </div>
+          ) : (
+            // AI Insights View
+            <div className="space-y-4">
+              <h4
+                className={`text-sm font-medium ${isDarkMode ? "text-slate-300" : "text-gray-700"} mb-3 flex items-center gap-2`}
+              >
+                <Lightbulb className="w-4 h-4 text-yellow-500" />
+                AI Insights
+              </h4>
 
-                {/* Generate Insights Button */}
-                {!generatedInsights && (
-                  <div className="text-center mb-4">
+              {/* Generate Insights Button */}
+              {!generatedInsights && (
+                <div className="text-center mb-4">
+                  <Button
+                    onClick={handleGenerateInsights}
+                    disabled={isGeneratingInsights || !selectedTextData?.selectedText}
+                    className={`px-4 py-2 rounded-xl font-medium flex items-center justify-center gap-2 mx-auto text-sm ${
+                      isGeneratingInsights || !selectedTextData?.selectedText
+                        ? isDarkMode
+                          ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                          : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : isDarkMode
+                          ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-lg hover:shadow-xl'
+                          : 'bg-purple-600 hover:bg-purple-700 text-white shadow-lg hover:shadow-xl'
+                    }`}
+                  >
+                    {isGeneratingInsights ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Generating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Lightbulb className="w-4 h-4" />
+                        <span>Generate AI Insights</span>
+                      </>
+                    )}
+                  </Button>
+                  
+                  {!selectedTextData?.selectedText && (
+                    <p className={`text-xs mt-2 ${isDarkMode ? "text-slate-400" : "text-gray-600"}`}>
+                      Select text first to generate insights
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Generated Insights Display */}
+              {generatedInsights && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className={`font-medium text-sm ${isDarkMode ? "text-white" : "text-gray-900"}`}>Generated Insights</h3>
                     <Button
-                      onClick={handleGenerateInsights}
-                      disabled={isGeneratingInsights || !selectedTextData?.selectedText}
-                      className={`px-4 py-2 rounded-xl font-medium flex items-center justify-center gap-2 mx-auto text-sm ${
-                        isGeneratingInsights || !selectedTextData?.selectedText
-                          ? isDarkMode
-                            ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
-                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                          : isDarkMode
-                            ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-lg hover:shadow-xl'
-                            : 'bg-purple-600 hover:bg-purple-700 text-white shadow-lg hover:shadow-xl'
+                      onClick={() => setGeneratedInsights(null)}
+                      className={`text-xs px-2 py-1 rounded ${
+                        isDarkMode 
+                          ? 'text-slate-400 hover:text-slate-300 hover:bg-slate-700' 
+                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
                       }`}
                     >
-                      {isGeneratingInsights ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>Generating...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Lightbulb className="w-4 h-4" />
-                          <span>Generate AI Insights</span>
-                        </>
-                      )}
+                      Clear
                     </Button>
-                    
-                    {!selectedTextData?.selectedText && (
-                      <p className={`text-xs mt-2 ${isDarkMode ? "text-slate-400" : "text-gray-600"}`}>
-                        Select text first to generate insights
-                      </p>
-                    )}
                   </div>
-                )}
 
-                {/* Generated Insights Display */}
-                {generatedInsights && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className={`font-medium text-sm ${isDarkMode ? "text-white" : "text-gray-900"}`}>Generated Insights</h3>
-                      <Button
-                        onClick={() => setGeneratedInsights(null)}
-                        className={`text-xs px-2 py-1 rounded ${
-                          isDarkMode 
-                            ? 'text-slate-400 hover:text-slate-300 hover:bg-slate-700' 
-                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                        }`}
-                      >
-                        Clear
-                      </Button>
-                    </div>
-
-                    {/* Key Takeaways */}
-                    <div
-                      className={`p-3 rounded-xl ${isDarkMode ? "bg-slate-700/50 border-slate-600" : "bg-white/80 border-gray-200"} border`}
+                  {/* Key Takeaways */}
+                  <div
+                    className={`p-3 rounded-xl ${isDarkMode ? "bg-slate-700/50 border-slate-600" : "bg-white/80 border-gray-200"} border`}
+                  >
+                    <h5
+                      className={`font-medium ${isDarkMode ? "text-white" : "text-gray-900"} mb-2 text-sm flex items-center gap-2`}
                     >
-                      <h5
-                        className={`font-medium ${isDarkMode ? "text-white" : "text-gray-900"} mb-2 text-sm flex items-center gap-2`}
-                      >
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        Key Takeaways
-                      </h5>
-                      <ul className="space-y-1">
-                        {generatedInsights.keyTakeaways.slice(0, 3).map((takeaway, index) => (
-                          <li
-                            key={index}
-                            className={`text-xs ${isDarkMode ? "text-slate-400" : "text-gray-600"} leading-relaxed flex items-start gap-2`}
-                          >
-                            <span className="text-green-500 mt-1">•</span>
-                            {takeaway}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    {/* Did You Know */}
-                    <div
-                      className={`p-3 rounded-xl ${isDarkMode ? "bg-slate-700/50 border-slate-600" : "bg-white/80 border-gray-200"} border`}
-                    >
-                      <h5
-                        className={`font-medium ${isDarkMode ? "text-white" : "text-gray-900"} mb-2 text-sm flex items-center gap-2`}
-                      >
-                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                        Did You Know?
-                      </h5>
-                      <ul className="space-y-1">
-                        {generatedInsights.didYouKnow.slice(0, 3).map((fact, index) => (
-                          <li
-                            key={index}
-                            className={`text-xs ${isDarkMode ? "text-slate-400" : "text-gray-600"} leading-relaxed flex items-start gap-2`}
-                          >
-                            <span className="text-blue-500 mt-1">•</span>
-                            {fact}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    {/* Contradictions */}
-                    <div
-                      className={`p-3 rounded-xl ${isDarkMode ? "bg-slate-700/50 border-slate-600" : "bg-white/80 border-gray-200"} border`}
-                    >
-                      <h5
-                        className={`font-medium ${isDarkMode ? "text-white" : "text-gray-900"} mb-2 text-sm flex items-center gap-2`}
-                      >
-                        <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                        Contradictions / Counterpoints
-                      </h5>
-                      <ul className="space-y-1">
-                        {generatedInsights.contradictions.slice(0, 3).map((contradiction, index) => (
-                          <li
-                            key={index}
-                            className={`text-xs ${isDarkMode ? "text-slate-400" : "text-gray-600"} leading-relaxed flex items-start gap-2`}
-                          >
-                            <span className="text-orange-500 mt-1">•</span>
-                            {contradiction}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    {/* Examples */}
-                    <div
-                      className={`p-3 rounded-xl ${isDarkMode ? "bg-slate-700/50 border-slate-600" : "bg-white/80 border-gray-200"} border`}
-                    >
-                      <h5
-                        className={`font-medium ${isDarkMode ? "text-white" : "text-gray-900"} mb-2 text-sm flex items-center gap-2`}
-                      >
-                        <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                        Examples
-                      </h5>
-                      <ul className="space-y-1">
-                        {generatedInsights.examples.slice(0, 3).map((example, index) => (
-                          <li
-                            key={index}
-                            className={`text-xs ${isDarkMode ? "text-slate-400" : "text-gray-600"} leading-relaxed flex items-start gap-2`}
-                          >
-                            <span className="text-purple-500 mt-1">•</span>
-                            {example}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      Key Takeaways
+                    </h5>
+                    <ul className="space-y-1">
+                      {generatedInsights.keyTakeaways.slice(0, 3).map((takeaway, index) => (
+                        <li
+                          key={index}
+                          className={`text-xs ${isDarkMode ? "text-slate-400" : "text-gray-600"} leading-relaxed flex items-start gap-2`}
+                        >
+                          <span className="text-green-500 mt-1">•</span>
+                          {takeaway}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                )}
 
-                {/* Error Display */}
-                {insightsError && (
-                  <div className={`p-3 rounded-xl text-sm ${
-                    isDarkMode 
-                      ? 'bg-red-500/10 border border-red-500/20 text-red-300' 
-                      : 'bg-red-50 border border-red-200 text-red-700'
-                  }`}>
-                    {insightsError}
+                  {/* Did You Know */}
+                  <div
+                    className={`p-3 rounded-xl ${isDarkMode ? "bg-slate-700/50 border-slate-600" : "bg-white/80 border-gray-200"} border`}
+                  >
+                    <h5
+                      className={`font-medium ${isDarkMode ? "text-white" : "text-gray-900"} mb-2 text-sm flex items-center gap-2`}
+                    >
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      Did You Know?
+                    </h5>
+                    <ul className="space-y-1">
+                      {generatedInsights.didYouKnow.slice(0, 3).map((fact, index) => (
+                        <li
+                          key={index}
+                          className={`text-xs ${isDarkMode ? "text-slate-400" : "text-gray-600"} leading-relaxed flex items-start gap-2`}
+                        >
+                          <span className="text-blue-500 mt-1">•</span>
+                          {fact}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                )}
-              </div>
-            )}
-          </div>
+
+                  {/* Contradictions */}
+                  <div
+                    className={`p-3 rounded-xl ${isDarkMode ? "bg-slate-700/50 border-slate-600" : "bg-white/80 border-gray-200"} border`}
+                  >
+                    <h5
+                      className={`font-medium ${isDarkMode ? "text-white" : "text-gray-900"} mb-2 text-sm flex items-center gap-2`}
+                    >
+                      <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                      Contradictions / Counterpoints
+                    </h5>
+                    <ul className="space-y-1">
+                      {generatedInsights.contradictions.slice(0, 3).map((contradiction, index) => (
+                        <li
+                          key={index}
+                          className={`text-xs ${isDarkMode ? "text-slate-400" : "text-gray-600"} leading-relaxed flex items-start gap-2`}
+                        >
+                          <span className="text-orange-500 mt-1">•</span>
+                          {contradiction}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Examples */}
+                  <div
+                    className={`p-3 rounded-xl ${isDarkMode ? "bg-slate-700/50 border-slate-600" : "bg-white/80 border-gray-200"} border`}
+                  >
+                    <h5
+                      className={`font-medium ${isDarkMode ? "text-white" : "text-gray-900"} mb-2 text-sm flex items-center gap-2`}
+                    >
+                      <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                      Examples
+                    </h5>
+                    <ul className="space-y-1">
+                      {generatedInsights.examples.slice(0, 3).map((example, index) => (
+                        <li
+                          key={index}
+                          className={`text-xs ${isDarkMode ? "text-slate-400" : "text-gray-600"} leading-relaxed flex items-start gap-2`}
+                        >
+                          <span className="text-purple-500 mt-1">•</span>
+                          {example}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {/* Error Display */}
+              {insightsError && (
+                <div className={`p-3 rounded-xl text-sm ${
+                  isDarkMode 
+                    ? 'bg-red-500/10 border border-red-500/20 text-red-300' 
+                    : 'bg-red-50 border border-red-200 text-red-700'
+                }`}>
+                  {insightsError}
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 };

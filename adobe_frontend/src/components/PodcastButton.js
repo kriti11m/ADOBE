@@ -9,9 +9,15 @@ const PodcastButton = ({
   currentSessionId = null,
   selectedText = '', 
   relatedSections = [],
-  isVisible = true
+  isVisible = true,
+  isGenerating = false, // Allow parent to control this
+  setIsGenerating // Allow parent to control this
 }) => {
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [localIsGenerating, setLocalIsGenerating] = useState(false);
+  
+  // Use parent-controlled state if available, otherwise use local state
+  const generating = isGenerating !== undefined ? isGenerating : localIsGenerating;
+  const setGenerating = setIsGenerating || setLocalIsGenerating;
 
   const handlePodcastClick = () => {
     // Check if we have content to generate podcast from
@@ -19,6 +25,9 @@ const PodcastButton = ({
       alert('Please select text or upload documents first to generate a podcast.');
       return;
     }
+
+    // Immediately set loading state to show user feedback
+    setGenerating(true);
 
     // Call the parent onClick handler (App.js handleFloatingPodcastClick)
     if (onClick) {
@@ -43,14 +52,15 @@ const PodcastButton = ({
   return (
     <>
       <button 
+        id="podcast-button"
         onClick={handlePodcastClick}
-        disabled={!hasContent || isGenerating}
+        disabled={!hasContent || generating}
         className={`floating-fab text-white p-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 ${
-          !hasContent || isGenerating
+          !hasContent || generating
             ? 'bg-gray-400 cursor-not-allowed'
             : 'bg-green-600 hover:bg-green-700'
         }`}
-        title={!hasContent ? 'Select content to generate podcast' : buttonText}
+        title={!hasContent ? 'Select content to generate podcast' : generating ? 'Generating podcast...' : buttonText}
         style={{
           position: 'fixed',
           bottom: '24px',
@@ -64,7 +74,7 @@ const PodcastButton = ({
         }}
       >
         <div className="flex items-center space-x-1">
-          {isGenerating ? (
+          {generating ? (
             <Loader2 className="w-6 h-6 animate-spin" />
           ) : (
             <span className="text-2xl">🎧</span>

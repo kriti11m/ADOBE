@@ -433,8 +433,8 @@ const FinalAdobePDFViewer = forwardRef(({
         };
 
         // Register the official Adobe event listener
-        if (viewerInstance.registerCallback) {
-          viewerInstance.registerCallback(
+        if (viewer.registerCallback) {
+          viewer.registerCallback(
             window.AdobeDC?.View?.Enum?.CallbackType?.EVENT_LISTENER || 'EVENT_LISTENER',
             async function(event) {
               console.log('🎯 Adobe event received:', event.type, event.data);

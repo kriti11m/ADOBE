@@ -141,4 +141,6 @@ async def root():
 # Removed duplicate health check endpoint
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8083)
+    import os
+    port = int(os.getenv("PORT", 8080))
+    uvicorn.run(app, host="0.0.0.0", port=port)

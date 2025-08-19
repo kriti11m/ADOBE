@@ -211,8 +211,22 @@ async def generate_audio_overview(request: AudioOverviewRequest):
     Generate 2-5 min audio overview/podcast based on selected content
     """
     try:
+        print(f"🎵 DEBUG: Audio overview request received")
+        print(f"🎵 DEBUG: Selected text: '{request.selected_text[:100] if request.selected_text else 'None'}...'")
+        print(f"🎵 DEBUG: Related sections count: {len(request.related_sections) if request.related_sections else 0}")
+        print(f"🎵 DEBUG: Audio type: {request.audio_type}")
+        print(f"🎵 DEBUG: Voice: {request.voice}")
+        print(f"🎵 DEBUG: Speed: {request.speed}")
+        
         if not request.selected_text:
+            print(f"❌ DEBUG: Selected text validation failed")
             raise HTTPException(status_code=400, detail="Selected text is required")
+        
+        if len(request.selected_text.strip()) < 3:
+            print(f"❌ DEBUG: Selected text too short: {len(request.selected_text.strip())} characters")
+            raise HTTPException(status_code=400, detail="Selected text must be at least 3 characters long")
+        
+        print(f"✅ DEBUG: Audio overview validation passed, generating script...")
         
         # Generate script for audio content with insights
         script = _generate_audio_script(
@@ -223,6 +237,8 @@ async def generate_audio_overview(request: AudioOverviewRequest):
             request.insights  # Pass the insights
         )
         
+        print(f"📝 DEBUG: Generated script length: {len(script)} characters")
+        
         # Generate audio using TTS service with voice and speed options
         audio_file_path = await _generate_audio_file(
             script, 
@@ -232,7 +248,10 @@ async def generate_audio_overview(request: AudioOverviewRequest):
         )
         
         if not audio_file_path or not os.path.exists(audio_file_path):
+            print(f"❌ DEBUG: Audio file generation failed")
             raise HTTPException(status_code=500, detail="Audio generation failed")
+        
+        print(f"✅ DEBUG: Audio file generated successfully: {audio_file_path}")
         
         return FileResponse(
             audio_file_path,
@@ -424,7 +443,7 @@ Keep each section 2-3 sentences, conversational tone suitable for audio.
 """
 
         # Use LLM service to generate insights
-        insights_response = llm_service.generate_response(prompt)
+        insights_response = llm_service.generate_related_content_insights(selected_text, related_sections)
         
         # Try to parse as JSON, fallback to structured text if needed
         try:

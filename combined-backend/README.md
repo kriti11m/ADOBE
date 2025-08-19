@@ -44,7 +44,7 @@ A unified FastAPI backend that integrates two powerful PDF processing services:
 
 ### Start the Server
 ```bash
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
 ### Access the API

@@ -124,10 +124,10 @@ function App() {
           name: doc.original_filename,
           status: 'uploaded',
           timestamp: new Date(doc.upload_timestamp).toLocaleDateString(),
-          tags: ['PDF', 'Backend'],
+          tags: ['PDF'],
           dbDocumentId: doc.id,
           // Add URL for Adobe PDF viewer
-          url: `${process.env.REACT_APP_API_URL || 'http://localhost:8083'}/documents/${doc.id}/download`
+          url: `${process.env.REACT_APP_API_URL || 'http://localhost:8080'}/documents/${doc.id}/download`
         }));
         
         // For compatibility with existing UI, convert to collections format
@@ -139,10 +139,10 @@ function App() {
           tags: ['PDF'],
           isUploaded: true,
           // Add URL for Adobe PDF viewer
-          url: `${process.env.REACT_APP_API_URL || 'http://localhost:8083'}/documents/${doc.id}/download`,
+          url: `${process.env.REACT_APP_API_URL || 'http://localhost:8080'}/documents/${doc.id}/download`,
           documents: [{ 
             ...doc, 
-            url: `${process.env.REACT_APP_API_URL || 'http://localhost:8083'}/documents/${doc.id}/download` 
+            url: `${process.env.REACT_APP_API_URL || 'http://localhost:8080'}/documents/${doc.id}/download` 
           }]
         }));
         
@@ -446,7 +446,7 @@ function App() {
         if (activeCollection.fromDatabase && activeCollection.dbCollectionId) {
           // Use the new collection analysis endpoint
           console.log(`🗃️ Analyzing database collection "${activeCollection.name}" (ID: ${activeCollection.dbCollectionId})`);
-          result = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8083'}/part1b/analyze-collection`, {
+          result = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8080'}/part1b/analyze-collection`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded',
@@ -757,7 +757,7 @@ function App() {
           name: doc.original_filename,
           status: 'uploaded',
           timestamp: new Date(doc.upload_timestamp).toLocaleDateString(),
-          tags: ['PDF', 'Backend'],
+          tags: ['PDF'],
           dbDocumentId: doc.id
         }));
         
@@ -819,7 +819,7 @@ function App() {
           name: doc.original_filename,
           status: 'uploaded',
           timestamp: new Date(doc.upload_timestamp).toLocaleDateString(),
-          tags: ['PDF', 'Backend'],
+          tags: ['PDF'],
           dbDocumentId: doc.id
         }));
         
@@ -1001,6 +1001,8 @@ function App() {
   const generatePodcastFromCurrentData = async () => {
     try {
       console.log('🎧 Starting podcast generation...');
+      setIsGeneratingAudio(true); // Set loading state immediately
+      
       console.log('Input data check:', {
         selectedTextData,
         recommendations: recommendations?.length || 0,
@@ -1012,11 +1014,29 @@ function App() {
       if (!selectedTextData && (!recommendations || recommendations.length === 0)) {
         console.warn('⚠ No text selection or recommendations available');
         alert('Please select some text first to generate relevant sections and insights, then try generating the podcast.');
+        setIsGeneratingAudio(false);
         return;
       }
 
-      // Use the original working method
-      const selectedText = selectedTextData?.selectedText || 'No text selected';
+      // Use the original working method - get selectedText from multiple possible sources
+      let selectedText = 'No text selected';
+      
+      // Priority order: selectedTextData, recommendations content, or fallback
+      if (selectedTextData?.selectedText) {
+        selectedText = selectedTextData.selectedText;
+      } else if (recommendations && recommendations.length > 0) {
+        // Use content from recommendations if available
+        selectedText = recommendations.map(rec => rec.content || rec.text || '').join(' ').trim();
+      } else if (relatedSections && relatedSections.length > 0) {
+        // Use content from related sections if available
+        selectedText = relatedSections.map(section => section.content || section.text || '').join(' ').trim();
+      }
+      
+      // If still no content, use document info
+      if (selectedText === 'No text selected' && currentDocument) {
+        selectedText = `Analysis of document: ${currentDocument.name}`;
+      }
+      
       const relatedSectionData = recommendations || relatedSections || [];
 
       console.log('📊 Calling generateAudioOverview with:', {
@@ -1076,6 +1096,8 @@ function App() {
     } catch (error) {
       console.error('❌ Error generating podcast from current data:', error);
       alert(`Error generating podcast: ${error.message}\n\nPlease check your connection and try again.`);
+    } finally {
+      setIsGeneratingAudio(false); // Always reset loading state
     }
   };
 
@@ -1095,7 +1117,25 @@ function App() {
         setIsPlaying(false);
       }
 
-      const selectedText = selectedTextData?.selectedText || 'No text selected';
+      // Use improved text selection logic - same as generatePodcastFromCurrentData
+      let selectedText = 'No text selected';
+      
+      // Priority order: selectedTextData, recommendations content, or fallback
+      if (selectedTextData?.selectedText) {
+        selectedText = selectedTextData.selectedText;
+      } else if (recommendations && recommendations.length > 0) {
+        // Use content from recommendations if available
+        selectedText = recommendations.map(rec => rec.content || rec.text || '').join(' ').trim();
+      } else if (relatedSections && relatedSections.length > 0) {
+        // Use content from related sections if available
+        selectedText = relatedSections.map(section => section.content || section.text || '').join(' ').trim();
+      }
+      
+      // If still no content, use document info
+      if (selectedText === 'No text selected' && currentDocument) {
+        selectedText = `Analysis of document: ${currentDocument.name}`;
+      }
+      
       const relatedSectionData = recommendations || relatedSections || [];
 
       // Check if audio is cached for the requested voice
@@ -1453,7 +1493,7 @@ function App() {
               </div>
             )}
 
-            <div id="pdf-viewer" className="flex-1">
+            <div id="pdf-viewer-container" className="flex-1">
               <FinalAdobePDFViewer 
                 ref={pdfViewerRef}
                 selectedDocument={currentDocument}
@@ -1483,6 +1523,8 @@ function App() {
             />
           </div>
         </div>
+          </>
+        )}
 
         {/* PDF Uploader Modal */}
         {showUploader && (
@@ -1786,6 +1828,8 @@ function App() {
           relatedSections={relatedSections}
           currentDocument={currentDocument}
           selectedSection={selectedTextData}
+          isGenerating={isGeneratingAudio}
+          setIsGenerating={setIsGeneratingAudio}
         />
 
         {/* Floating Audio Player */}
@@ -1957,9 +2001,6 @@ function App() {
               )}
             </div>
           </div>
-        )}
-
-            </>
         )}
 
       </div>
