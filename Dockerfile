@@ -1,6 +1,6 @@
 # Multi-stage Docker build for Adobe Contest
 # Platform: linux/amd64 as required by contest
-FROM --platform=linux/amd64 python:3.11-slim as base
+FROM --platform=linux/amd64 python:3.11-slim AS base
 
 # Set working directory
 WORKDIR /app
