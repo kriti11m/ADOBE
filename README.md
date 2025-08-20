@@ -23,7 +23,7 @@ docker-compose up --build
 
 ```bash
 # Adobe PDF Embed API
-ADOBE_EMBED_API_KEY=<your_adobe_key>
+ADOBE_EMBED_API_KEY=dfd0b7db776d46e08de836741b4b8b9a
 
 # LLM Provider (Gemini)
 LLM_PROVIDER=gemini
