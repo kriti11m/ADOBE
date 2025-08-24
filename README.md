@@ -1,218 +1,182 @@
-# DocuVerse 🚀
-*Where all your docs live in a connected universe*
+# DocuVerse 
+*AI-Powered Cross-Document Intelligence Platform*
 
-## Adobe India Hackathon 2025 - Interactive PDF Intelligence Platform
+# Adobe India Hackathon 2025 - Interactive PDF Intelligence Platform
 
-Ever wished your PDFs could talk to each other? DocuVerse makes it happen! 🤖✨ 
-
-This isn't just another PDF viewer - it's an AI-powered platform that transforms how you interact with documents. Upload multiple PDFs, select any text, and watch as our AI connects the dots across your entire document collection, generating insights and even creating podcast-style audio summaries.
+An AI-powered platform that transforms PDF interaction with cross-document insights, smart navigation, and contextual content generation.
 
 ---
 
-## 🚀 **Quick Start for Contest Evaluators**
+## **Quick Start - Docker Setup**
 
-### **Method 1: Docker (Recommended - Works Every Time!)**
+# **Step 1: Update Dockerfile**
+
+Create/Update the `Dockerfile` in the root directory with this code:
+
+```dockerfile
+# Multi-stage Docker build for Adobe Contest
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies including eSpeak for TTS
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    git \
+    build-essential \
+    espeak \
+    espeak-data \
+    libespeak1 \
+    libespeak-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better caching
+COPY combined-backend/requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy backend code
+COPY combined-backend/ ./
+
+# Copy frontend build  
+COPY adobe_frontend/build/ ./frontend/
+
+# Create necessary directories
+RUN mkdir -p /app/data/collections \
+    && mkdir -p /app/temp_audio \
+    && mkdir -p /credentials
+
+# Copy startup script
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
+# Set environment variables
+ENV PYTHONPATH="/app"
+ENV PYTHONUNBUFFERED=1
+ENV HOST=0.0.0.0
+ENV PORT=8080
+ENV LLM_PROVIDER=gemini
+ENV GEMINI_MODEL=gemini-2.5-flash
+ENV TTS_PROVIDER=azure
+
+# Expose port
+EXPOSE 8080
+
+# Use the startup script
+CMD ["/app/start.sh"]
+```
+
+# **Step 2: Create start.sh File**
+
+Create a `start.sh` file in the root directory:
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/kriti11m/ADOBE.git
-cd ADOBE
+#!/bin/bash
+# Contest-compliant startup script
+set -e
 
-# 2. Build with exact contest command
+echo "Starting Adobe Contest Application..."
+
+# Set environment variables with defaults
+export HOST=${HOST:-0.0.0.0}
+export PORT=${PORT:-8080}
+
+# Database setup
+export DATABASE_URL=${DATABASE_URL:-"sqlite:///app/data/pdf_collections.db"}
+echo "Database path: $DATABASE_URL"
+
+# Create necessary directories
+mkdir -p /app/data
+mkdir -p /app/temp_audio
+mkdir -p /app/uploads
+
+# Check if we have API keys configured
+if [ -n "$GEMINI_API_KEY" ]; then
+    echo "✅ Gemini API key configured"
+fi
+
+if [ -n "$ADOBE_EMBED_API_KEY" ]; then
+    echo "✅ Adobe API key configured"
+fi
+
+# Start the FastAPI application
+echo "Starting server on $HOST:$PORT"
+exec uvicorn main:app --host $HOST --port $PORT --workers 1
+```
+
+# **Step 3: Build the Docker Image**
+
+```bash
 docker build --platform linux/amd64 -t yourimageidentifier .
+```
 
-# 3. Run with your API keys (contest-compliant)
+# **Step 4: Run the Container**
+
+```bash
 docker run --rm \
-  -v /path/to/credentials:/credentials \
-  -e ADOBE_EMBED_API_KEY=<dfd0b7db776d46e08de836741b4b8b9a> \
+  -e ADOBE_EMBED_API_KEY="dfd0b7db776d46e08de836741b4b8b9a" \
   -e LLM_PROVIDER=gemini \
-  -e GOOGLE_APPLICATION_CREDENTIALS=/credentials/adbe-gcp.json \
-  -e GEMINI_MODEL=gemini-2.5-flash \
+  -e GEMINI_API_KEY="your_gemini_api_key" \
+  -e GEMINI_MODEL="gemini-2.5-flash" \
   -e TTS_PROVIDER=azure \
-  -e AZURE_TTS_KEY=<YOUR_TTS_KEY> \
-  -e AZURE_TTS_ENDPOINT=<YOUR_TTS_ENDPOINT> \
+  -e AZURE_TTS_KEY="test_key" \
+  -e AZURE_TTS_ENDPOINT="test_endpoint" \
   -p 8080:8080 \
   yourimageidentifier
 ```
 
-**🌐 Access your app at:** http://localhost:8080
-
-### **Method 2: Docker Compose (Even Easier!)**
-
-```bash
-# Just run this and you're done!
-docker-compose up --build
-```
-
-### **Method 3: Local Development**
-
-```bash
-# Backend
-cd combined-backend
-pip install -r requirements.txt
-python main.py
-
-# Frontend (new terminal)
-cd adobe_frontend
-npm install
-npm run build  # Build for production
-# App accessible at http://localhost:8080
-```
+**Access the application at:** http://localhost:8080
 
 ---
 
-## 🏆 **Contest Features - What Makes Us Special**
+## **Quick Start Guide & Best Practices**
 
-### ✅ **Core Requirements Met**
-- **✓ Single Port:** Everything runs on port 8080 (no port juggling!)
-- **✓ Docker Ready:** One command deployment with contest-compliant build
-- **✓ Environment Variables:** All API keys externalized (no hardcoded secrets!)
+### **What to do For Optimal Performance:**
+
+1. **First-Time Setup:**
+   - When accessing the application, you can choose to take the interactive tutorial or skip it
+   - **Recommended:** Click "Skip Tutorial" for immediate access to all features
+   - If you complete the tutorial and experience any UI responsiveness, simply refresh the page and click on skip tutorial to proceed.
+
+2. **Document Management Best Practice:**
+   - Before bulk document uploads, navigate to **Settings → Manage Documents**
+   - Click **"Clear History"** to ensure optimal performance and clean slate
+   - This ensures efficient document processing and prevents any legacy data conflicts
+
+*These practices ensure seamless document processing and optimal user experience with DocuVerse's advanced AI features.*
+
+---
+
+## **Features**
+
+- **Cross-Document Intelligence:** AI-powered connections between multiple PDFs
+- **Smart Navigation:** Precise Adobe PDF navigation with page-specific linking
+- **AI-Generated Insights:** Contextual analysis using Gemini AI
+- **Audio Podcasts:** Text-to-speech document summaries
+- **Real-time Search:** Semantic document search across collections
+
+---
+
+## **Contest Features**
+
+- **✓ Single Port:** Everything runs on port 8080
+- **✓ Docker Ready:** One-command deployment
+- **✓ Environment Variables:** All API keys externalized
 - **✓ Health Checks:** Real-time monitoring at `/health`
 
-### ✅ **Bonus Features (+10 Points)**
-- **✓ Insights Bulb (+5):** AI generates comprehensive insights from your text selections
-- **✓ Audio Podcast (+5):** Converts insights into engaging audio content with voice options
-
-### ✅ **The Magic Under the Hood**
-- **Adobe PDF Embed API:** Crystal-clear PDF rendering (no more blurry PDFs!)
-- **Google Gemini AI:** Advanced text analysis that actually understands context
-- **Azure TTS:** Professional-grade audio generation
-- **Smart Cross-Document Analysis:** Finds connections across your entire document library
-
 ---
 
-## 🎯 **How It Actually Works**
+## **Tech Stack**
 
-### **The User Journey:**
-```
-Upload PDFs → Select Text → Get AI Insights → Generate Audio → Mind = Blown 🤯
-```
+- **Frontend:** React, Adobe PDF Embed API
+- **Backend:** FastAPI, Python
+- **AI/ML:** Gemini AI, Sentence Transformers
+- **Database:** SQLite
+- **Deployment:** Docker, Uvicorn
 
-1. **Upload:** Drag & drop your PDFs (supports bulk upload)
-2. **Explore:** Navigate through documents with our smart sidebar
-3. **Select:** Highlight any text that interests you
-4. **Discover:** Watch as AI finds related content across ALL your documents
-5. **Insights:** Click the lightbulb for deep AI analysis
-6. **Listen:** Generate podcast-style audio summaries (male/female voices available)
-
-### **Real-World Example:**
-- Upload research papers on "Machine Learning" and "Data Science"
-- Select text about "neural networks" 
-- DocuVerse finds related sections across both papers
-- AI generates insights connecting concepts from both documents
-- Convert to audio for your commute 🎧
-
----
-
-## ⚙️ **Environment Variables Setup**
-
-### **Required for Contest Evaluation:**
-
-```bash
-# Adobe PDF Services
-ADOBE_EMBED_API_KEY=dfd0b7db776d46e08de836741b4b8b9a
-
-# AI Provider (Gemini)
-LLM_PROVIDER=gemini
-GEMINI_MODEL=gemini-2.5-flash
-GOOGLE_APPLICATION_CREDENTIALS=/credentials/adbe-gcp.json
-# OR use direct API key:
-GOOGLE_API_KEY=your_gemini_api_key_here
-
-# Text-to-Speech (Azure)
-TTS_PROVIDER=azure
-AZURE_TTS_KEY=your_azure_tts_key
-AZURE_TTS_ENDPOINT=your_azure_endpoint
-AZURE_TTS_DEPLOYMENT=tts
-```
-
-### **Optional but Recommended:**
-```bash
-# Database (defaults to SQLite)
-DATABASE_URL=sqlite:///./data/pdf_collections.db
-
-# Debug settings
-DEBUG=True
-LOG_LEVEL=INFO
-```
-
----
-
-## 🛠️ **Technology Stack**
-
-### **Frontend Magic**
-- **React 18** - Modern hooks and state management
-- **Tailwind CSS** - Beautiful, responsive design
-- **Adobe PDF Embed API** - Enterprise-grade PDF rendering
-- **Smart State Management** - No unnecessary re-renders
-
-### **Backend Power**
-- **FastAPI** - Lightning-fast async Python framework
-- **SQLite Database** - Efficient document storage
-- **Google Gemini AI** - Advanced text analysis
-- **Sentence Transformers** - Semantic similarity magic
-
-### **AI & Intelligence**
-- **Cross-Document Analysis** - Finds connections between documents
-- **Semantic Search** - Understanding meaning, not just keywords
-- **Natural Language Processing** - Context-aware text understanding
-- **Smart Caching** - Instant responses for repeated queries
-
----
-
-## 📱 **User Guide - How to Use DocuVerse**
-
-### **Getting Started (5 minutes to wow!)**
-
-1. **First Time Setup:**
-   - Open http://localhost:8080
-   - Skip tutorial or take the 2-minute tour
-   - Upload your first PDF
-
-2. **The Magic Workflow:**
-   ```
-   📄 Upload → 👁️ View → ✂️ Select → 💡 Insights → 🎧 Audio
-   ```
-
-### **Features That'll Blow Your Mind:**
-
-#### 📚 **Document Management**
-- **Drag & Drop:** Just drop PDFs anywhere on the page
-- **Bulk Upload:** Select multiple files at once
-- **Smart Organization:** Documents auto-organize by topic
-- **Instant Search:** Find any document in seconds
-
-#### 🧠 **Smart Connections Panel**
-This is where the magic happens! The right sidebar shows:
-- **Related Sections** across ALL your documents
-- **Jump Navigation** to relevant content
-- **Real-time Updates** as you select text
-
-#### 💡 **AI Insights Generator**
-1. Highlight any text in your PDF
-2. Click the lightbulb icon (you'll see it appear)
-3. Watch as AI generates:
-   - **Key Takeaways** - Main points summarized
-   - **Did You Know** - Interesting facts and connections
-   - **Cross-References** - Related content from other documents
-   - **Contradictions** - Alternative viewpoints found
-
-#### 🎧 **Podcast Mode (The Coolest Feature!)**
-1. Select text or use generated insights
-2. Click the floating podcast button (bottom-right)
-3. Choose your narrator (male/female voice)
-4. Sit back and listen to your documents come alive!
-
-**Audio Controls:**
-- Speed adjustment (0.75x - 2.0x)
-- Skip forward/backward (10-second jumps)
-- Keyboard shortcuts (spacebar to pause, arrow keys to navigate)
-
----
-
-## 🔧 **API Documentation**
-
-### **Key Endpoints You'll Love:**
 
 ```http
 # Upload and analyze documents
@@ -240,7 +204,7 @@ curl http://localhost:8080/health
 
 ---
 
-## 🧪 **Testing & Debugging**
+## **Testing & Debugging**
 
 ### **Quick Health Checks:**
 
@@ -284,9 +248,7 @@ python main.py
 
 ---
 
-## 🐳 **Docker Testing Made Easy**
-
-Want to test exactly like the contest judges will? Here's how:
+## **Docker Testing Made Easy**
 
 ### **Step 1: Build**
 ```bash
@@ -318,7 +280,7 @@ Open http://localhost:8080 - you should see DocuVerse running!
 
 ---
 
-## 📊 **Performance & Benchmarks**
+## **Performance & Benchmarks**
 
 We've optimized DocuVerse for real-world usage:
 
@@ -336,11 +298,10 @@ We've optimized DocuVerse for real-world usage:
 
 ---
 
-## 🚀 **Deployment Options**
+## **Deployment Options**
 
 ### **For Contest Judges (Docker):**
 ```bash
-# Exactly as specified in contest requirements
 docker build --platform linux/amd64 -t yourimageidentifier .
 docker run -p 8080:8080 yourimageidentifier
 ```
@@ -354,32 +315,7 @@ cd combined-backend && pip install -r requirements.txt && python main.py
 cd adobe_frontend && npm install && npm run build
 ```
 
-### **For Production (Docker Compose):**
-```bash
-docker-compose -f docker-compose.prod.yml up --build
-```
-
----
-
-## 🎉 **What Makes DocuVerse Special**
-
-### **Innovation Highlights:**
-- **First-of-its-kind** cross-document intelligence
-- **Real-time** AI insights generation
-- **Voice-enabled** document consumption
-- **Zero-configuration** setup for evaluators
-- **Enterprise-grade** PDF rendering
-
-### **Technical Excellence:**
-- Contest-compliant Docker setup
-- Robust error handling and fallbacks
-- Optimized for performance and scalability
-- Clean, maintainable codebase
-- Comprehensive API documentation
-
----
-
-## 💡 **Pro Tips for Best Experience**
+## **Pro Tips for Best Experience**
 
 1. **Upload Strategy:** Upload related documents together for better cross-analysis
 2. **Text Selection:** Select complete sentences/paragraphs for better insights
@@ -389,28 +325,6 @@ docker-compose -f docker-compose.prod.yml up --build
 
 ---
 
-## 🤝 **Contributing & Development**
-
-Want to contribute? We'd love your help!
-
-```bash
-# 1. Fork the repository
-git clone your-fork-url
-cd ADOBE
-
-# 2. Create a feature branch
-git checkout -b feature/amazing-feature
-
-# 3. Make your changes
-# ... code code code ...
-
-# 4. Test everything works
-docker-compose up --build
-
-# 5. Submit pull request
-git push origin feature/amazing-feature
-```
-
 ### **Development Standards:**
 - **Frontend:** ESLint + Prettier for consistent code style
 - **Backend:** Black + isort for Python formatting
@@ -419,57 +333,14 @@ git push origin feature/amazing-feature
 
 ---
 
-## 📞 **Support & Resources**
+## **Support & Resources**
 
 ### **Quick Links:**
-- **🌐 Live Demo:** http://localhost:8080 (when running)
-- **📚 API Docs:** http://localhost:8080/docs
-- **🏥 Health Check:** http://localhost:8080/health
-- **🔧 Adobe PDF API:** [Official Documentation](https://developer.adobe.com/document-services/docs/overview/pdf-embed-api/)
+- **Live Demo:** http://localhost:8080 (when running)
+- **API Docs:** http://localhost:8080/docs
+- **Health Check:** http://localhost:8080/health
+- **Adobe PDF API:** [Official Documentation](https://developer.adobe.com/document-services/docs/overview/pdf-embed-api/)
 
-### **Getting Help:**
-- **🐛 Found a bug?** Check the browser console and backend logs
-- **💡 Have an idea?** Open a GitHub issue with your suggestion
-- **❓ Need help?** Check our troubleshooting section above
+## Demo video link ##
 
-### **Contest Support:**
-- **📧 Technical Issues:** Check `/health` endpoint first
-- **🐳 Docker Problems:** Ensure Docker Desktop is running
-- **🔑 API Key Issues:** Verify environment variables are set correctly
-
----
-
-## 🏆 **Contest Submission Summary**
-
-**DocuVerse** delivers everything required and more:
-
-### ✅ **Contest Requirements Met:**
-- Single port deployment (8080) ✓
-- Docker build/run compliance ✓
-- Environment variable configuration ✓
-- Health monitoring ✓
-- Adobe PDF integration ✓
-
-### ✅ **Bonus Features Delivered:**
-- Insights Bulb (+5 points) ✓
-- Audio/Podcast generation (+5 points) ✓
-
-### ✅ **Technical Excellence:**
-- Production-ready architecture ✓
-- Comprehensive error handling ✓
-- Real-time AI processing ✓
-- Cross-document intelligence ✓
-
-**Ready for evaluation!** 🎯
-
----
-
-## 📄 **License**
-
-This project was created for Adobe India Hackathon 2025.
-
-**Built with ❤️ and lots of ☕ for the future of document intelligence.**
-
----
-
-*DocuVerse – where all your docs live in a connected universe* 🚀
+https://drive.google.com/file/d/1TtegpGUUTrwJOd98f5BBS3uau6w5gHzt/view?usp=drive_web
